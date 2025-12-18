@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package rag;
+
+// Go package option
+option go_package = "./pb";
+
+// --------------------------------------------------------
+// RAG Service Definition
+// --------------------------------------------------------
+service RagService {
+  /// Chat is an RPC that processes a user's query and returns a response.
+  /// It takes a ChatRequest containing the query, session ID, and configuration,
+  /// and returns a ChatResponse with the generated answer and source documents.
+    rpc Chat (ChatRequest) returns (ChatResponse);
+}
+
+// --------------------------------------------------------
+// Request Message Definitions
+// --------------------------------------------------------
+message ChatRequest {
+  string      query      = 1; // User's question
+  string      session_id = 2; // Unique session identifier
+  QueryConfig config     = 3; // Retrieval configuration
+}
+
+message QueryConfig {
+  string collection_name = 1; // Name of the document collection
+  int32  max_results     = 2; // Maximum number of source documents to retrieve
+}
+
+// --------------------------------------------------------
+// Response Message Definitions
+// --------------------------------------------------------
+message ChatResponse {
+  string          answer             = 1; // Generated answer
+  repeated Source source_documents   = 2; // Retrieved source documents
+  double          processing_time_ms = 3; // Processing time in milliseconds
+}
+
+message Source {
+  string filename    = 1; // Name of the source document
+  int32  page_number = 2; // Page number in the document
+  string snippet     = 3; // Relevant text snippet
+  float  score       = 4; // Relevance score
+}
