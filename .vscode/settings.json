@@ -1,4 +1,4 @@
 {
-  "python.autoComplete.extraPaths": ["./backend-python"],
-  "python.analysis.extraPaths": ["./backend-python"]
+  "python.autoComplete.extraPaths": ["./backend-python", "./backend-python/pb"],
+  "python.analysis.extraPaths": ["./backend-python", "./backend-python/pb"]
 }

@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode
+__pycache__
+venv/
+backend-python/venv/
+backend-go/bin/
+*.md
+docker-compose.yml
+Makefile

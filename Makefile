@@ -43,11 +43,17 @@ gen-proto: ## Generates Go and Python code from .proto files
 		--go-grpc_out=$(GO_DIR)/pb --go-grpc_opt=paths=source_relative \
 		rag_service.proto
 
-	@printf "$(BLUE)➡️  Generating Python code...$(RESET)\n"
+	@printf "$(BLUE)➡️  Generating Python code (with Type Stub)...$(RESET)\n"
 	@python3 -m grpc_tools.protoc \
 		-I$(PROTO_DIR) \
-		--python_out=$(PY_DIR)/pb --grpc_python_out=$(PY_DIR)/pb \
+		--python_out=$(PY_DIR)/pb \
+		--grpc_python_out=$(PY_DIR)/pb \
+		--mypy_out=$(PY_DIR)/pb \
+		--mypy_grpc_out=$(PY_DIR)/pb \
 		rag_service.proto
+
+	@printf "$(YELLOW)🔧 Fixing Python imports (Patching)...$(RESET)\n"
+	@sed -i 's/import rag_service_pb2/from . import rag_service_pb2/' $(PY_DIR)/pb/rag_service_pb2_grpc.py
 	
 	@printf "$(GREEN)✅ Code generation completed!$(RESET)\n"
 

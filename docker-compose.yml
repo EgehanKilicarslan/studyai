@@ -1,0 +1,31 @@
+services:
+  # 🧠 AI BRAIN
+  backend-python:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    container_name: rag-python-service
+    ports:
+      - "50051:50051" 
+    networks:
+      - rag-network
+
+  # 🌐 ORCHESTRATOR
+  backend-go:
+    build:
+      context: ./backend-go
+      dockerfile: Dockerfile
+    container_name: rag-go-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - AI_SERVICE_ADDR=backend-python:50051
+      - GIN_MODE=release
+    depends_on:
+      - backend-python 
+    networks:
+      - rag-network
+
+networks:
+  rag-network:
+    driver: bridge
