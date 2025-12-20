@@ -58,6 +58,23 @@ gen-proto: ## Generates Go and Python code from .proto files
 	@printf "$(GREEN)✅ Code generation completed!$(RESET)\n"
 
 # -----------------------------------------------------------------------------
+# TESTING
+# -----------------------------------------------------------------------------
+.PHONY: test
+test: test-py test-go ## Runs all tests (Python and Go)
+	@printf "$(GREEN)✅ All tests completed successfully!$(RESET)\n"
+
+.PHONY: test-py
+test-py: ## Runs Python tests (pytest)
+	@printf "$(BLUE)🐍 Running Python tests (pytest)...$(RESET)\n"
+	@cd $(PY_DIR) && uv run pytest -v
+
+.PHONY: test-go
+test-go: ## Runs Go tests
+	@printf "$(BLUE)🐹 Running Go tests...$(RESET)\n"
+	@cd $(GO_DIR) && go test ./tests/... -v -count=1
+
+# -----------------------------------------------------------------------------
 # DOCKER OPERATIONS
 # -----------------------------------------------------------------------------
 .PHONY: up
