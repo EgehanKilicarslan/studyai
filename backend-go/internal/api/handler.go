@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -56,5 +58,45 @@ func (h *Handler) ChatHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"answer":  resp.Answer,
 		"sources": resp.SourceDocuments,
+	})
+}
+
+func (h *Handler) UploadHandler(c *gin.Context) {
+	// 1. Get the file from the request
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Could not get uploaded file"})
+		return
+	}
+	defer file.Close()
+
+	// 2. Read file content
+	content, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Could not read uploaded file"})
+		return
+	}
+
+	// 3. gRPC Request
+	grpcReq := &pb.UploadRequest{
+		Filename:    header.Filename,
+		ContentType: header.Header.Get("Content-Type"),
+		FileContent: content,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// 4. Send to RAG service
+	resp, err := h.ragClient.Service.UploadDocument(ctx, grpcReq)
+	if err != nil {
+		c.JSON(500, gin.H{"error": fmt.Sprintf("Processing error: %v", err)})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"status":  resp.Status,
+		"message": resp.Message,
+		"chunks":  resp.ChunksCount,
 	})
 }

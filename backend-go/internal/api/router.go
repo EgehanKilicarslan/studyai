@@ -13,6 +13,7 @@ func SetupRouter(h *Handler) *gin.Engine {
 
 	// Bind handler function
 	r.POST("/api/chat", h.ChatHandler)
+	r.POST("/api/upload", h.UploadHandler)
 
 	return r
 }

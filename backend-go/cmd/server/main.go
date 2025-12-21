@@ -11,15 +11,22 @@ import (
 
 func main() {
 	// 1. Config
-	pythonAddr := os.Getenv("AI_SERVICE_ADDR")
-	if pythonAddr == "" {
-		pythonAddr = "localhost:50051"
+	aiServiceHost := os.Getenv("AI_SERVICE_HOST")
+	if aiServiceHost == "" {
+		aiServiceHost = "localhost"
 	}
 
-	fmt.Printf("🚀 [Go] Starting Orchestrator... (Target: %s)\n", pythonAddr)
+	aiServicePort := os.Getenv("AI_SERVICE_PORT")
+	if aiServicePort == "" {
+		aiServicePort = "50051"
+	}
+
+	aiServiceAddr := fmt.Sprintf("%s:%s", aiServiceHost, aiServicePort)
+
+	fmt.Printf("🚀 [Go] Starting Orchestrator... (Target: %s)\n", aiServiceAddr)
 
 	// 2. Start RAG Client
-	ragClient, err := rag.NewClient(pythonAddr)
+	ragClient, err := rag.NewClient(aiServiceAddr)
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to Python service: %v", err)
 	}
