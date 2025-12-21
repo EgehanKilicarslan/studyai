@@ -9,6 +9,8 @@ services:
       - "50051:50051"
     env_file:
       - .env
+    depends_on:
+      - vector-db
     networks:
       - rag-network
 
@@ -21,12 +23,30 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - AI_SERVICE_ADDR=backend-python:50051
       - GIN_MODE=release
+    env_file:
+      - .env
     depends_on:
       - backend-python 
     networks:
       - rag-network
+
+  # 📚 VECTOR DATABASE
+  vector-db:
+    image: qdrant/qdrant:latest
+    container_name: rag-vector-db
+    ports:
+      - "6333:6333" # API port
+      - "6334:6334" # gRPC port
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+    driver: local
 
 networks:
   rag-network:

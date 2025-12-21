@@ -1,11 +1,12 @@
 [project]
 name = "backend-python"
 version = "0.1.0"
-description = "Add your description here"
+description = "Backend service for RAG Assistant"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "dependency-injector>=4.48.3",
+    "fastembed>=0.7.4",
     "google-genai>=1.56.0",
     "grpcio>=1.76.0",
     "grpcio-tools>=1.76.0",
@@ -14,6 +15,8 @@ dependencies = [
     "openai>=2.14.0",
     "protobuf>=6.33.2",
     "pydantic-settings>=2.12.0",
+    "pymupdf>=1.26.7",
+    "qdrant-client>=1.16.2",
     "types-protobuf>=6.32.1.20251210",
 ]
 
