@@ -40,7 +40,7 @@ class Settings(BaseSettings):
         self.llm_provider = v
         return self
 
-    class Config:
+    class ConfigDict:
         env_file = ".env"
         env_file_encoding = "utf-8"
 
