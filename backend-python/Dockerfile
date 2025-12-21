@@ -23,10 +23,15 @@ WORKDIR /app
 
 RUN addgroup --system appgroup && adduser --system --group appuser
 
+# Create cache directory for HuggingFace models with proper permissions
+RUN mkdir -p /home/appuser/.cache/huggingface && \
+    chown -R appuser:appgroup /home/appuser/.cache
+
 COPY --from=builder /dist /app/libs
 
 ENV PYTHONPATH="/app/libs:$PYTHONPATH"
 ENV PATH="/app/libs/bin:$PATH"
+ENV HF_HOME="/home/appuser/.cache/huggingface"
 
 COPY app/ ./app/
 COPY pb/ ./pb/

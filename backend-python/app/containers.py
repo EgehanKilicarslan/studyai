@@ -1,8 +1,8 @@
 from dependency_injector import containers, providers
 
 from .config import settings
-from .llm.factory import get_llm_provider
-from .services.rag_service import RagService
+from .llm import get_llm_provider
+from .services import EmbeddingService, RagService
 
 
 class Container(containers.DeclarativeContainer):
@@ -10,4 +10,8 @@ class Container(containers.DeclarativeContainer):
 
     llm_client = providers.Factory(get_llm_provider, settings=config)
 
-    rag_service = providers.Factory(RagService, llm_provider=llm_client)
+    embedding_service = providers.Factory(EmbeddingService, settings=config)
+
+    rag_service = providers.Factory(
+        RagService, llm_provider=llm_client, embedding_service=embedding_service
+    )

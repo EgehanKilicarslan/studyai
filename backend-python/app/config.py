@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    python_port: int = Field(default=50051)
+
     llm_provider: str = Field(default="dummy")
 
     model_name: str = Field(default="local")
@@ -14,6 +16,9 @@ class Settings(BaseSettings):
 
     local_llm_url: str = Field(default="http://localhost:8080/v1/chat/completions")
     local_llm_timeout: float = Field(default=60.0)
+
+    qdrant_host: str = Field(default="localhost")
+    qdrant_port: int = Field(default=6333)
 
     @model_validator(mode="after")
     def validate_provider(self) -> "Settings":
