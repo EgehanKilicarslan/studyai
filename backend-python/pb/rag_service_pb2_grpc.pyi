@@ -41,7 +41,23 @@ _RagServiceChatType = typing_extensions.TypeVar(
     ],
 )
 
-class RagServiceStub(typing.Generic[_RagServiceChatType]):
+_RagServiceUploadDocumentType = typing_extensions.TypeVar(
+    '_RagServiceUploadDocumentType',
+    grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
+    ],
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
+    ],
+    default=grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
+    ],
+)
+
+class RagServiceStub(typing.Generic[_RagServiceChatType, _RagServiceUploadDocumentType]):
     """--------------------------------------------------------
     RAG Service Definition
     --------------------------------------------------------
@@ -53,6 +69,10 @@ class RagServiceStub(typing.Generic[_RagServiceChatType]):
             rag_service_pb2.ChatRequest,
             rag_service_pb2.ChatResponse,
         ],
+        grpc.UnaryUnaryMultiCallable[
+            rag_service_pb2.UploadRequest,
+            rag_service_pb2.UploadResponse,
+        ],
     ], channel: grpc.Channel) -> None: ...
 
     @typing.overload
@@ -60,6 +80,10 @@ class RagServiceStub(typing.Generic[_RagServiceChatType]):
         grpc.aio.UnaryUnaryMultiCallable[
             rag_service_pb2.ChatRequest,
             rag_service_pb2.ChatResponse,
+        ],
+        grpc.aio.UnaryUnaryMultiCallable[
+            rag_service_pb2.UploadRequest,
+            rag_service_pb2.UploadResponse,
         ],
     ], channel: grpc.aio.Channel) -> None: ...
 
@@ -69,10 +93,20 @@ class RagServiceStub(typing.Generic[_RagServiceChatType]):
     / and returns a ChatResponse with the generated answer and source documents.
     """
 
+    UploadDocument: _RagServiceUploadDocumentType
+    """/ UploadDocument is an RPC that handles document uploads.
+    / It takes an UploadRequest with file details and content,
+    / and returns an UploadResponse indicating the status of the upload.
+    """
+
 RagServiceAsyncStub: typing_extensions.TypeAlias = RagServiceStub[
     grpc.aio.UnaryUnaryMultiCallable[
         rag_service_pb2.ChatRequest,
         rag_service_pb2.ChatResponse,
+    ],
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
     ],
 ]
 
@@ -91,6 +125,17 @@ class RagServiceServicer(metaclass=abc.ABCMeta):
         """/ Chat is an RPC that processes a user's query and returns a response.
         / It takes a ChatRequest containing the query, session ID, and configuration,
         / and returns a ChatResponse with the generated answer and source documents.
+        """
+
+    @abc.abstractmethod
+    def UploadDocument(
+        self,
+        request: rag_service_pb2.UploadRequest,
+        context: _ServicerContext,
+    ) -> typing.Union[rag_service_pb2.UploadResponse, collections.abc.Awaitable[rag_service_pb2.UploadResponse]]:
+        """/ UploadDocument is an RPC that handles document uploads.
+        / It takes an UploadRequest with file details and content,
+        / and returns an UploadResponse indicating the status of the upload.
         """
 
 def add_RagServiceServicer_to_server(servicer: RagServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...

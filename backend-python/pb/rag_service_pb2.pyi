@@ -128,3 +128,56 @@ class Source(google.protobuf.message.Message):
     def ClearField(self, field_name: typing.Literal["filename", b"filename", "page_number", b"page_number", "score", b"score", "snippet", b"snippet"]) -> None: ...
 
 Global___Source: typing_extensions.TypeAlias = Source
+
+@typing.final
+class UploadRequest(google.protobuf.message.Message):
+    """--------------------------------------------------------
+    Upload Message Definitions
+    --------------------------------------------------------
+    """
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    FILENAME_FIELD_NUMBER: builtins.int
+    CONTENT_TYPE_FIELD_NUMBER: builtins.int
+    FILE_CONTENT_FIELD_NUMBER: builtins.int
+    filename: builtins.str
+    """Name of the file being uploaded"""
+    content_type: builtins.str
+    """MIME type of the file (e.g., application/pdf)"""
+    file_content: builtins.bytes
+    """Binary content of the file"""
+    def __init__(
+        self,
+        *,
+        filename: builtins.str = ...,
+        content_type: builtins.str = ...,
+        file_content: builtins.bytes = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["content_type", b"content_type", "file_content", b"file_content", "filename", b"filename"]) -> None: ...
+
+Global___UploadRequest: typing_extensions.TypeAlias = UploadRequest
+
+@typing.final
+class UploadResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    STATUS_FIELD_NUMBER: builtins.int
+    CHUNKS_COUNT_FIELD_NUMBER: builtins.int
+    MESSAGE_FIELD_NUMBER: builtins.int
+    status: builtins.str
+    """Status message"""
+    chunks_count: builtins.int
+    """Number of chunks created from the file"""
+    message: builtins.str
+    """Additional information or error message"""
+    def __init__(
+        self,
+        *,
+        status: builtins.str = ...,
+        chunks_count: builtins.int = ...,
+        message: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["chunks_count", b"chunks_count", "message", b"message", "status", b"status"]) -> None: ...
+
+Global___UploadResponse: typing_extensions.TypeAlias = UploadResponse

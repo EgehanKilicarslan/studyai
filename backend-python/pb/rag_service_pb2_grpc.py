@@ -45,6 +45,12 @@ class RagServiceStub(object):
             response_deserializer=rag__service__pb2.ChatResponse.FromString,
             _registered_method=True,
         )
+        self.UploadDocument = channel.unary_unary(
+            "/rag.RagService/UploadDocument",
+            request_serializer=rag__service__pb2.UploadRequest.SerializeToString,
+            response_deserializer=rag__service__pb2.UploadResponse.FromString,
+            _registered_method=True,
+        )
 
 
 class RagServiceServicer(object):
@@ -62,6 +68,15 @@ class RagServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def UploadDocument(self, request, context):
+        """/ UploadDocument is an RPC that handles document uploads.
+        / It takes an UploadRequest with file details and content,
+        / and returns an UploadResponse indicating the status of the upload.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_RagServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -69,6 +84,11 @@ def add_RagServiceServicer_to_server(servicer, server):
             servicer.Chat,
             request_deserializer=rag__service__pb2.ChatRequest.FromString,
             response_serializer=rag__service__pb2.ChatResponse.SerializeToString,
+        ),
+        "UploadDocument": grpc.unary_unary_rpc_method_handler(
+            servicer.UploadDocument,
+            request_deserializer=rag__service__pb2.UploadRequest.FromString,
+            response_serializer=rag__service__pb2.UploadResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler("rag.RagService", rpc_method_handlers)
@@ -102,6 +122,36 @@ class RagService(object):
             "/rag.RagService/Chat",
             rag__service__pb2.ChatRequest.SerializeToString,
             rag__service__pb2.ChatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def UploadDocument(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/rag.RagService/UploadDocument",
+            rag__service__pb2.UploadRequest.SerializeToString,
+            rag__service__pb2.UploadResponse.FromString,
             options,
             channel_credentials,
             insecure,

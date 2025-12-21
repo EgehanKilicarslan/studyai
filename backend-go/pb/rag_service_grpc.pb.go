@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RagService_Chat_FullMethodName = "/rag.RagService/Chat"
+	RagService_Chat_FullMethodName           = "/rag.RagService/Chat"
+	RagService_UploadDocument_FullMethodName = "/rag.RagService/UploadDocument"
 )
 
 // RagServiceClient is the client API for RagService service.
@@ -34,6 +35,10 @@ type RagServiceClient interface {
 	// / It takes a ChatRequest containing the query, session ID, and configuration,
 	// / and returns a ChatResponse with the generated answer and source documents.
 	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error)
+	// / UploadDocument is an RPC that handles document uploads.
+	// / It takes an UploadRequest with file details and content,
+	// / and returns an UploadResponse indicating the status of the upload.
+	UploadDocument(ctx context.Context, in *UploadRequest, opts ...grpc.CallOption) (*UploadResponse, error)
 }
 
 type ragServiceClient struct {
@@ -54,6 +59,16 @@ func (c *ragServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...gr
 	return out, nil
 }
 
+func (c *ragServiceClient) UploadDocument(ctx context.Context, in *UploadRequest, opts ...grpc.CallOption) (*UploadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadResponse)
+	err := c.cc.Invoke(ctx, RagService_UploadDocument_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RagServiceServer is the server API for RagService service.
 // All implementations must embed UnimplementedRagServiceServer
 // for forward compatibility.
@@ -66,6 +81,10 @@ type RagServiceServer interface {
 	// / It takes a ChatRequest containing the query, session ID, and configuration,
 	// / and returns a ChatResponse with the generated answer and source documents.
 	Chat(context.Context, *ChatRequest) (*ChatResponse, error)
+	// / UploadDocument is an RPC that handles document uploads.
+	// / It takes an UploadRequest with file details and content,
+	// / and returns an UploadResponse indicating the status of the upload.
+	UploadDocument(context.Context, *UploadRequest) (*UploadResponse, error)
 	mustEmbedUnimplementedRagServiceServer()
 }
 
@@ -78,6 +97,9 @@ type UnimplementedRagServiceServer struct{}
 
 func (UnimplementedRagServiceServer) Chat(context.Context, *ChatRequest) (*ChatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Chat not implemented")
+}
+func (UnimplementedRagServiceServer) UploadDocument(context.Context, *UploadRequest) (*UploadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UploadDocument not implemented")
 }
 func (UnimplementedRagServiceServer) mustEmbedUnimplementedRagServiceServer() {}
 func (UnimplementedRagServiceServer) testEmbeddedByValue()                    {}
@@ -118,6 +140,24 @@ func _RagService_Chat_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RagService_UploadDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RagServiceServer).UploadDocument(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RagService_UploadDocument_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RagServiceServer).UploadDocument(ctx, req.(*UploadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RagService_ServiceDesc is the grpc.ServiceDesc for RagService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -128,6 +168,10 @@ var RagService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Chat",
 			Handler:    _RagService_Chat_Handler,
+		},
+		{
+			MethodName: "UploadDocument",
+			Handler:    _RagService_UploadDocument_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

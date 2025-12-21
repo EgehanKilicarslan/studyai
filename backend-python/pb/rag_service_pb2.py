@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"R\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12 \n\x06\x63onfig\x18\x03 \x01(\x0b\x32\x10.rag.QueryConfig\";\n\x0bQueryConfig\x12\x17\n\x0f\x63ollection_name\x18\x01 \x01(\t\x12\x13\n\x0bmax_results\x18\x02 \x01(\x05\"a\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\"O\n\x06Source\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x13\n\x0bpage_number\x18\x02 \x01(\x05\x12\x0f\n\x07snippet\x18\x03 \x01(\t\x12\r\n\x05score\x18\x04 \x01(\x02\x32\x39\n\nRagService\x12+\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponseB\x06Z\x04./pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"R\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12 \n\x06\x63onfig\x18\x03 \x01(\x0b\x32\x10.rag.QueryConfig\";\n\x0bQueryConfig\x12\x17\n\x0f\x63ollection_name\x18\x01 \x01(\t\x12\x13\n\x0bmax_results\x18\x02 \x01(\x05\"a\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\"O\n\x06Source\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x13\n\x0bpage_number\x18\x02 \x01(\x05\x12\x0f\n\x07snippet\x18\x03 \x01(\t\x12\r\n\x05score\x18\x04 \x01(\x02\"M\n\rUploadRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x02 \x01(\t\x12\x14\n\x0c\x66ile_content\x18\x03 \x01(\x0c\"G\n\x0eUploadResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x14\n\x0c\x63hunks_count\x18\x02 \x01(\x05\x12\x0f\n\x07message\x18\x03 \x01(\t2t\n\nRagService\x12+\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse\x12\x39\n\x0eUploadDocument\x12\x12.rag.UploadRequest\x1a\x13.rag.UploadResponseB\x06Z\x04./pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,6 +40,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CHATRESPONSE']._serialized_end=268
   _globals['_SOURCE']._serialized_start=270
   _globals['_SOURCE']._serialized_end=349
-  _globals['_RAGSERVICE']._serialized_start=351
-  _globals['_RAGSERVICE']._serialized_end=408
+  _globals['_UPLOADREQUEST']._serialized_start=351
+  _globals['_UPLOADREQUEST']._serialized_end=428
+  _globals['_UPLOADRESPONSE']._serialized_start=430
+  _globals['_UPLOADRESPONSE']._serialized_end=501
+  _globals['_RAGSERVICE']._serialized_start=503
+  _globals['_RAGSERVICE']._serialized_end=619
 # @@protoc_insertion_point(module_scope)

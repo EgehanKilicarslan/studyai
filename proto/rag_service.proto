@@ -12,7 +12,12 @@ service RagService {
   /// Chat is an RPC that processes a user's query and returns a response.
   /// It takes a ChatRequest containing the query, session ID, and configuration,
   /// and returns a ChatResponse with the generated answer and source documents.
-    rpc Chat (ChatRequest) returns (ChatResponse);
+  rpc Chat (ChatRequest) returns (ChatResponse);
+
+  /// UploadDocument is an RPC that handles document uploads.
+  /// It takes an UploadRequest with file details and content,
+  /// and returns an UploadResponse indicating the status of the upload.
+  rpc UploadDocument (UploadRequest) returns (UploadResponse);
 }
 
 // --------------------------------------------------------
@@ -43,4 +48,19 @@ message Source {
   int32  page_number = 2; // Page number in the document
   string snippet     = 3; // Relevant text snippet
   float  score       = 4; // Relevance score
+}
+
+// --------------------------------------------------------
+// Upload Message Definitions
+// --------------------------------------------------------
+message UploadRequest {
+  string filename     = 1; // Name of the file being uploaded
+  string content_type = 2; // MIME type of the file (e.g., application/pdf)
+  bytes  file_content = 3; // Binary content of the file
+}
+
+message UploadResponse {
+  string status       = 1; // Status message
+  int32  chunks_count = 2; // Number of chunks created from the file
+  string message      = 3; // Additional information or error message
 }
