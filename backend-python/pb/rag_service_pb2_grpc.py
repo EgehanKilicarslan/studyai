@@ -39,7 +39,7 @@ class RagServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Chat = channel.unary_unary(
+        self.Chat = channel.unary_stream(
             "/rag.RagService/Chat",
             request_serializer=rag__service__pb2.ChatRequest.SerializeToString,
             response_deserializer=rag__service__pb2.ChatResponse.FromString,
@@ -80,7 +80,7 @@ class RagServiceServicer(object):
 
 def add_RagServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "Chat": grpc.unary_unary_rpc_method_handler(
+        "Chat": grpc.unary_stream_rpc_method_handler(
             servicer.Chat,
             request_deserializer=rag__service__pb2.ChatRequest.FromString,
             response_serializer=rag__service__pb2.ChatResponse.SerializeToString,
@@ -116,7 +116,7 @@ class RagService(object):
         timeout=None,
         metadata=None,
     ):
-        return grpc.experimental.unary_unary(
+        return grpc.experimental.unary_stream(
             request,
             target,
             "/rag.RagService/Chat",

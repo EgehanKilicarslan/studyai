@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import AsyncGenerator, Dict, List
 
 
 class LLMProvider(ABC):
@@ -8,9 +8,9 @@ class LLMProvider(ABC):
     """
 
     @abstractmethod
-    async def generate_response(
+    def generate_response(
         self, query: str, context_docs: List[str], history: List[Dict[str, str]]
-    ) -> str:
+    ) -> AsyncGenerator[str, None]:
         """
         Generate a response based on the given query, context documents, and conversation history.
 
@@ -22,7 +22,7 @@ class LLMProvider(ABC):
                 where each dictionary contains keys such as 'user' and 'assistant' to track the dialogue.
 
         Returns:
-            str: The generated response based on the input query, context, and history.
+            AsyncGenerator[str, None]: The generated response based on the input query, context, and history.
         """
         pass
 

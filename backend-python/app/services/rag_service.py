@@ -1,4 +1,5 @@
 import time
+from typing import AsyncGenerator
 
 import fitz
 import grpc
@@ -68,7 +69,7 @@ class RagService(rs_grpc.RagServiceServicer):
 
     async def Chat(
         self, request: rs.ChatRequest, context: grpc.aio.ServicerContext
-    ) -> rs.ChatResponse:
+    ) -> AsyncGenerator[rs.ChatResponse, None]:
         start_time = time.time()
         print(f"[RagService] Question received: {request.query} | Session ID: {request.session_id}")
 
@@ -79,32 +80,44 @@ class RagService(rs_grpc.RagServiceServicer):
 
             print(f"[RagService] Retrieved {len(context_docs)} context documents from vector DB.")
 
-            answer = await self.llm.generate_response(
+            llm_error = False
+            async for chunk in self.llm.generate_response(
                 query=request.query, context_docs=context_docs, history=[]
-            )
+            ):
+                # Check if chunk is an error message
+                if chunk.startswith("Error generating response"):
+                    llm_error = True
 
-            source_documents = []
-            for hit in search_results:
-                meta = hit["metadata"]
-
-                doc = rs.Source(
-                    filename=meta.get("filename", "Bilinmeyen Dosya"),
-                    page_number=int(meta.get("page", 1)),
-                    # Truncate snippet to first 200 characters for brevity
-                    snippet=hit["content"][:200].replace("\n", " ") + "...",
-                    score=hit["score"],
+                yield rs.ChatResponse(
+                    answer=chunk,
+                    source_documents=[],
+                    processing_time_ms=0.0,
                 )
-                source_documents.append(doc)
 
+            # Only send sources if LLM didn't error
+            if not llm_error:
                 processing_time = (time.time() - start_time) * 1000
 
-            return rs.ChatResponse(
-                answer=answer, source_documents=source_documents, processing_time_ms=processing_time
-            )
+                source_documents = []
+                for hit in search_results:
+                    meta = hit["metadata"]
+
+                    doc = rs.Source(
+                        filename=meta.get("filename", "Unknown file"),
+                        page_number=int(meta.get("page", 1)),
+                        # Truncate snippet to first 100 characters for brevity
+                        snippet=hit["content"][:100].replace("\n", " ") + "...",
+                        score=hit["score"],
+                    )
+                    source_documents.append(doc)
+
+                yield rs.ChatResponse(
+                    answer="", source_documents=source_documents, processing_time_ms=processing_time
+                )
 
         except Exception as e:
             print(f"Error: {e}")
-            return rs.ChatResponse(
+            yield rs.ChatResponse(
                 answer="Sorry, an error occurred while generating the response.",
                 source_documents=[],
                 processing_time_ms=0.0,

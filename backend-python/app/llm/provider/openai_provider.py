@@ -1,4 +1,4 @@
-from typing import Dict, List, cast
+from typing import AsyncGenerator, Dict, List, cast
 
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
@@ -7,13 +7,13 @@ from ..base import LLMProvider
 
 
 class OpenAIProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str):
-        self.client = AsyncOpenAI(api_key=api_key)
+    def __init__(self, api_key: str, model: str, timeout: float) -> None:
+        self.client = AsyncOpenAI(api_key=api_key, timeout=timeout)
         self.model = model
 
     async def generate_response(
         self, query: str, context_docs: List[str], history: List[Dict[str, str]]
-    ) -> str:
+    ) -> AsyncGenerator[str, None]:
         system_prompt = (
             "You are a helpful and precise AI assistant. "
             "Your task is to answer the user's question based ONLY on the provided context. "
@@ -47,12 +47,19 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 temperature=0.1,
                 max_tokens=1024,
+                stream=True,
             )
 
-            return response.choices[0].message.content or ""
+            if not response:
+                raise ValueError("Response text is None")
+
+            async for chunk in response:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
 
         except Exception as e:
-            return f"Error generating response (OpenAI): {str(e)}"
+            yield f"Error generating response (OpenAI): {str(e)}"
 
     @property
     def provider_name(self) -> str:

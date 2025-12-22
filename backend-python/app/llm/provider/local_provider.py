@@ -1,18 +1,19 @@
-from typing import Any, Dict, List
+from typing import AsyncGenerator, Dict, List, cast
 
-import httpx
+from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 from ..base import LLMProvider
 
 
 class LocalProvider(LLMProvider):
-    def __init__(self, base_url: str, timeout: float) -> None:
-        self.base_url = base_url
-        self.timeout = httpx.Timeout(float(timeout), connect=5.0)
+    def __init__(self, base_url: str, model: str, timeout: float) -> None:
+        self.client = AsyncOpenAI(base_url=base_url, api_key="no-api-key", timeout=timeout)
+        self.model = model
 
     async def generate_response(
         self, query: str, context_docs: List[str], history: List[Dict[str, str]]
-    ) -> str:
+    ) -> AsyncGenerator[str, None]:
         system_prompt = (
             "You are a helpful and precise AI assistant. "
             "Your task is to answer the user's question based ONLY on the provided context. "
@@ -20,10 +21,15 @@ class LocalProvider(LLMProvider):
             "Do not fabricate information or use outside knowledge unless explicitly asked."
         )
 
-        messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        messages: List[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
 
         if history:
-            messages.extend(history)
+            messages.extend(
+                cast(
+                    List[ChatCompletionMessageParam],
+                    [{"role": h["role"], "content": h["content"]} for h in history],
+                )
+            )
 
         context_str = "\n\n---\n\n".join(context_docs)
 
@@ -35,28 +41,28 @@ class LocalProvider(LLMProvider):
 
         messages.append({"role": "user", "content": user_prompt})
 
-        payload = {"messages": messages, "temperature": 0.1, "max_tokens": 1024, "stream": False}
-
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(self.base_url, json=payload)
+            # Removed invalid method call as AsyncOpenAI does not support models.list()
+            pass
 
-                response.raise_for_status()
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=1024,
+                stream=True,
+            )
 
-                data = response.json()
+            if not response:
+                raise ValueError("Response text is None")
 
-                if "choices" in data and len(data["choices"]) > 0:
-                    content = data["choices"][0]["message"].get("content", "")
-                    return content
-                else:
-                    return "Error: Unexpected response format from Local LLM."
+            async for chunk in response:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
 
-        except httpx.ConnectError:
-            return "Error: Could not connect to Local LLM server. Is it running?"
-        except httpx.TimeoutException:
-            return "Error: Local LLM timed out while generating response."
         except Exception as e:
-            return f"Error generating response (Local): {str(e)}"
+            yield f"Error generating response (Local): {str(e)}"
 
     @property
     def provider_name(self) -> str:

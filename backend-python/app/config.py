@@ -11,11 +11,12 @@ class Settings(BaseSettings):
 
     model_name: str = Field(default="local")
 
+    llm_timeout: float = Field(default=60.0)
+
     openai_api_key: Optional[str] = Field(default=None)
     gemini_api_key: Optional[str] = Field(default=None)
 
     local_llm_url: str = Field(default="http://localhost:8080/v1/chat/completions")
-    local_llm_timeout: float = Field(default=60.0)
 
     qdrant_host: str = Field(default="localhost")
     qdrant_port: int = Field(default=6333)

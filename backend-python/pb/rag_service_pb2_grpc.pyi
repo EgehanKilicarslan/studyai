@@ -27,15 +27,15 @@ GRPC_GENERATED_VERSION: str
 GRPC_VERSION: str
 _RagServiceChatType = typing_extensions.TypeVar(
     '_RagServiceChatType',
-    grpc.UnaryUnaryMultiCallable[
+    grpc.UnaryStreamMultiCallable[
         rag_service_pb2.ChatRequest,
         rag_service_pb2.ChatResponse,
     ],
-    grpc.aio.UnaryUnaryMultiCallable[
+    grpc.aio.UnaryStreamMultiCallable[
         rag_service_pb2.ChatRequest,
         rag_service_pb2.ChatResponse,
     ],
-    default=grpc.UnaryUnaryMultiCallable[
+    default=grpc.UnaryStreamMultiCallable[
         rag_service_pb2.ChatRequest,
         rag_service_pb2.ChatResponse,
     ],
@@ -65,7 +65,7 @@ class RagServiceStub(typing.Generic[_RagServiceChatType, _RagServiceUploadDocume
 
     @typing.overload
     def __init__(self: RagServiceStub[
-        grpc.UnaryUnaryMultiCallable[
+        grpc.UnaryStreamMultiCallable[
             rag_service_pb2.ChatRequest,
             rag_service_pb2.ChatResponse,
         ],
@@ -77,7 +77,7 @@ class RagServiceStub(typing.Generic[_RagServiceChatType, _RagServiceUploadDocume
 
     @typing.overload
     def __init__(self: RagServiceStub[
-        grpc.aio.UnaryUnaryMultiCallable[
+        grpc.aio.UnaryStreamMultiCallable[
             rag_service_pb2.ChatRequest,
             rag_service_pb2.ChatResponse,
         ],
@@ -100,7 +100,7 @@ class RagServiceStub(typing.Generic[_RagServiceChatType, _RagServiceUploadDocume
     """
 
 RagServiceAsyncStub: typing_extensions.TypeAlias = RagServiceStub[
-    grpc.aio.UnaryUnaryMultiCallable[
+    grpc.aio.UnaryStreamMultiCallable[
         rag_service_pb2.ChatRequest,
         rag_service_pb2.ChatResponse,
     ],
@@ -121,7 +121,7 @@ class RagServiceServicer(metaclass=abc.ABCMeta):
         self,
         request: rag_service_pb2.ChatRequest,
         context: _ServicerContext,
-    ) -> typing.Union[rag_service_pb2.ChatResponse, collections.abc.Awaitable[rag_service_pb2.ChatResponse]]:
+    ) -> typing.Union[collections.abc.Iterator[rag_service_pb2.ChatResponse], collections.abc.AsyncIterator[rag_service_pb2.ChatResponse]]:
         """/ Chat is an RPC that processes a user's query and returns a response.
         / It takes a ChatRequest containing the query, session ID, and configuration,
         / and returns a ChatResponse with the generated answer and source documents.

@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import AsyncGenerator, Dict, List
 
 from google.genai import Client
 from google.genai.types import GenerateContentConfig
@@ -7,13 +7,13 @@ from ..base import LLMProvider
 
 
 class GeminiProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(self, api_key: str, model: str, timeout: float) -> None:
         self.client = Client(api_key=api_key).aio
         self.model = model
 
     async def generate_response(
         self, query: str, context_docs: List[str], history: List[Dict[str, str]]
-    ) -> str:
+    ) -> AsyncGenerator[str, None]:
         system_prompt = (
             "You are a helpful and precise AI assistant. "
             "Your task is to answer the user's question based ONLY on the provided context. "
@@ -36,7 +36,7 @@ class GeminiProvider(LLMProvider):
         messages.append(user_prompt)
 
         try:
-            response = await self.client.models.generate_content(
+            response = await self.client.models.generate_content_stream(
                 model=self.model,
                 contents=messages,
                 config=GenerateContentConfig(
@@ -46,12 +46,15 @@ class GeminiProvider(LLMProvider):
                 ),
             )
 
-            if response.text is None:
+            if not response:
                 raise ValueError("Response text is None")
 
-            return response.text
+            async for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+
         except Exception as e:
-            return f"Error generating response (Gemini): {str(e)}"
+            yield f"Error generating response (Gemini): {str(e)}"
 
     @property
     def provider_name(self) -> str:
