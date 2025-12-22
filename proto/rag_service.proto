@@ -12,7 +12,7 @@ service RagService {
   /// Chat is an RPC that processes a user's query and returns a response.
   /// It takes a ChatRequest containing the query, session ID, and configuration,
   /// and returns a ChatResponse with the generated answer and source documents.
-  rpc Chat (ChatRequest) returns (ChatResponse);
+  rpc Chat (ChatRequest) returns (stream ChatResponse);
 
   /// UploadDocument is an RPC that handles document uploads.
   /// It takes an UploadRequest with file details and content,
