@@ -31,15 +31,9 @@ class LocalProvider(LLMProvider):
                 )
             )
 
-        context_str = "\n\n---\n\n".join(context_docs)
-
-        user_prompt = (
-            f"Please answer the question based on the following context:\n\n"
-            f"CONTEXT:\n{context_str}\n\n"
-            f"QUESTION: {query}"
+        messages.append(
+            {"role": "user", "content": super()._build_context_prompt(query, context_docs)}
         )
-
-        messages.append({"role": "user", "content": user_prompt})
 
         try:
             response = await self.client.chat.completions.create(

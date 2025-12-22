@@ -14,33 +14,18 @@ class GeminiProvider(LLMProvider):
     async def generate_response(
         self, query: str, context_docs: List[str], history: List[Dict[str, str]]
     ) -> AsyncGenerator[str, None]:
-        system_prompt = (
-            "You are a helpful and precise AI assistant. "
-            "Your task is to answer the user's question based ONLY on the provided context. "
-            "If the answer is not present in the context, state that you do not have enough information. "
-            "Do not fabricate information or use outside knowledge unless explicitly asked."
-        )
-
         messages = []
         if history:
             messages.extend(history)
 
-        context_str = "\n\n---\n\n".join(context_docs)
-
-        user_prompt = (
-            f"\nPlease answer the question based on the following context:\n\n"
-            f"CONTEXT:\n{context_str}\n\n"
-            f"QUESTION: {query}"
-        )
-
-        messages.append(user_prompt)
+        messages.append(super()._build_context_prompt(query, context_docs))
 
         try:
             response = await self.client.models.generate_content_stream(
                 model=self.model,
                 contents=messages,
                 config=GenerateContentConfig(
-                    system_instruction=system_prompt,
+                    system_instruction=super().DEFAULT_SYSTEM_PROMPT,
                     max_output_tokens=1024,
                     temperature=0.1,
                 ),
