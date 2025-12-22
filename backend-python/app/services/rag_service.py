@@ -1,7 +1,7 @@
 import re
 import time
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List
 
 import fitz
 import grpc
@@ -36,6 +36,44 @@ class RagService(rs_grpc.RagServiceServicer):
 
         return True, ""
 
+    def _chunk_text(self, text: str, chunk_size: int = 200, overlap: int = 50) -> List[str]:
+        """Split text into overlapping chunks."""
+        if not text or not text.strip():
+            return []
+
+        chunks = []
+        sentences = re.split(r"(?<=[.!?]) +", text)
+
+        # If no sentence boundaries found, split by words
+        if len(sentences) == 1 and len(text.split()) > chunk_size:
+            words = text.split()
+            for i in range(0, len(words), chunk_size - overlap):
+                chunk = " ".join(words[i : i + chunk_size])
+                chunks.append(chunk)
+            return chunks
+
+        current_chunk = []
+        current_size = 0
+
+        for sentence in sentences:
+            sentence_size = len(sentence.split())
+
+            if current_size + sentence_size > chunk_size and current_chunk:
+                chunks.append(" ".join(current_chunk))
+
+                # Keep last 'overlap' words for context
+                overlap_text = " ".join(" ".join(current_chunk).split()[-overlap:])
+                current_chunk = [overlap_text]
+                current_size = len(overlap_text.split())
+
+            current_chunk.append(sentence)
+            current_size += sentence_size
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+
+        return [c for c in chunks if c.strip()]  # Filter empty chunks
+
     async def UploadDocument(
         self, request: rs.UploadRequest, context: grpc.aio.ServicerContext
     ) -> rs.UploadResponse:
@@ -58,14 +96,20 @@ class RagService(rs_grpc.RagServiceServicer):
                         text = page.get_text()
 
                         if isinstance(text, str) and text.strip():
-                            text_chunks.append(text)
-                            metadatas.append({"filename": request.filename, "page": i + 1})
+                            # Chunk the page text instead of adding full pages
+                            page_chunks = self._chunk_text(text)
+                            for chunk in page_chunks:
+                                text_chunks.append(chunk)
+                                metadatas.append({"filename": request.filename, "page": i + 1})
 
                 print(f"[RagService] Extracted {len(text_chunks)} text chunks from PDF.")
             else:
                 text = request.file_content.decode("utf-8")
-                text_chunks.append(text)
-                metadatas.append({"filename": request.filename, "page": 1})
+                # Chunk the text file content
+                file_chunks = self._chunk_text(text)
+                for chunk in file_chunks:
+                    text_chunks.append(chunk)
+                    metadatas.append({"filename": request.filename, "page": 1})
                 print("[RagService] Extracted text from non-PDF document.")
 
             if not text_chunks:
@@ -75,7 +119,9 @@ class RagService(rs_grpc.RagServiceServicer):
                     message="No text extracted from the document.",
                 )
 
+            print(f"[DEBUG] About to add {len(text_chunks)} chunks to embedding service")
             count = self.embedding_service.add_documents(documents=text_chunks, metadatas=metadatas)
+            print(f"[DEBUG] Embedding service returned count: {count}")
 
             return rs.UploadResponse(
                 status="success",
