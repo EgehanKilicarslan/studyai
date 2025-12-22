@@ -1,4 +1,6 @@
+import re
 import time
+from pathlib import Path
 from typing import AsyncGenerator
 
 import fitz
@@ -21,12 +23,29 @@ class RagService(rs_grpc.RagServiceServicer):
         self.max_file_size = settings.maximum_file_size
         self.allowed_file_types = {".pdf", ".txt", ".md"}
 
+    def _validate_upload(self, request: rs.UploadRequest) -> tuple[bool, str]:
+        if len(request.file_content) > self.max_file_size:
+            return False, f"File size exceeds the maximum limit of {self.max_file_size} bytes."
+
+        file_ext = Path(request.filename).suffix.lower()
+        if file_ext not in self.allowed_file_types:
+            return False, f"File type '{file_ext}' is not supported."
+
+        if not re.match(r"^[\w\-. ]+$", request.filename):
+            return False, "Invalid filename characters"
+
+        return True, ""
+
     async def UploadDocument(
         self, request: rs.UploadRequest, context: grpc.aio.ServicerContext
     ) -> rs.UploadResponse:
         print(
             f"[RagService] UploadDocument called with filename: {request.filename} ({len(request.file_content)} bytes)"
         )
+
+        is_valid, error_msg = self._validate_upload(request)
+        if not is_valid:
+            return rs.UploadResponse(status="error", chunks_count=0, message=error_msg)
 
         try:
             text_chunks = []
