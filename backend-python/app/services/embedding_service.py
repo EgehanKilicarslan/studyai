@@ -18,14 +18,14 @@ class EmbeddingService:
 
         self.embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
-        self._create_collection_if_not_exists()
+        self._create_collection_if_not_exists(vector_size=settings.embedding_vector_size)
 
-    def _create_collection_if_not_exists(self):
+    def _create_collection_if_not_exists(self, vector_size: int):
         if not self.client.collection_exists(self.collection_name):
             self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=models.VectorParams(
-                    size=384,
+                    size=vector_size,
                     distance=models.Distance.COSINE,
                 ),
             )

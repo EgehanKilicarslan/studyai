@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     qdrant_host: str = Field(default="localhost")
     qdrant_port: int = Field(default=6333)
 
+    embedding_vector_size: int = Field(default=384)
+
     @model_validator(mode="after")
     def validate_provider(self) -> "Settings":
         """Validate and normalize the LLM provider"""
