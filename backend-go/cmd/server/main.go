@@ -26,7 +26,7 @@ func main() {
 	fmt.Printf("🚀 [Go] Starting Orchestrator... (Target: %s)\n", aiServiceAddr)
 
 	// 2. Start RAG Client
-	ragClient, err := rag.NewClient(aiServiceAddr)
+	ragClient, err := rag.NewClient(aiServiceAddr, false)
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to Python service: %v", err)
 	}
