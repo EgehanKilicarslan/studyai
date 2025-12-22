@@ -421,10 +421,10 @@ const file_rag_service_proto_rawDesc = "" +
 	"\x0eUploadResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12!\n" +
 	"\fchunks_count\x18\x02 \x01(\x05R\vchunksCount\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage2t\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage2v\n" +
 	"\n" +
-	"RagService\x12+\n" +
-	"\x04Chat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse\x129\n" +
+	"RagService\x12-\n" +
+	"\x04Chat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x01\x129\n" +
 	"\x0eUploadDocument\x12\x12.rag.UploadRequest\x1a\x13.rag.UploadResponseB\x06Z\x04./pbb\x06proto3"
 
 var (

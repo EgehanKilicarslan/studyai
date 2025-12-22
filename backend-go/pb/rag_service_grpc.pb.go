@@ -34,7 +34,7 @@ type RagServiceClient interface {
 	// / Chat is an RPC that processes a user's query and returns a response.
 	// / It takes a ChatRequest containing the query, session ID, and configuration,
 	// / and returns a ChatResponse with the generated answer and source documents.
-	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error)
+	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error)
 	// / UploadDocument is an RPC that handles document uploads.
 	// / It takes an UploadRequest with file details and content,
 	// / and returns an UploadResponse indicating the status of the upload.
@@ -49,15 +49,24 @@ func NewRagServiceClient(cc grpc.ClientConnInterface) RagServiceClient {
 	return &ragServiceClient{cc}
 }
 
-func (c *ragServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error) {
+func (c *ragServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ChatResponse)
-	err := c.cc.Invoke(ctx, RagService_Chat_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &RagService_ServiceDesc.Streams[0], RagService_Chat_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[ChatRequest, ChatResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type RagService_ChatClient = grpc.ServerStreamingClient[ChatResponse]
 
 func (c *ragServiceClient) UploadDocument(ctx context.Context, in *UploadRequest, opts ...grpc.CallOption) (*UploadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -80,7 +89,7 @@ type RagServiceServer interface {
 	// / Chat is an RPC that processes a user's query and returns a response.
 	// / It takes a ChatRequest containing the query, session ID, and configuration,
 	// / and returns a ChatResponse with the generated answer and source documents.
-	Chat(context.Context, *ChatRequest) (*ChatResponse, error)
+	Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error
 	// / UploadDocument is an RPC that handles document uploads.
 	// / It takes an UploadRequest with file details and content,
 	// / and returns an UploadResponse indicating the status of the upload.
@@ -95,8 +104,8 @@ type RagServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRagServiceServer struct{}
 
-func (UnimplementedRagServiceServer) Chat(context.Context, *ChatRequest) (*ChatResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Chat not implemented")
+func (UnimplementedRagServiceServer) Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error {
+	return status.Error(codes.Unimplemented, "method Chat not implemented")
 }
 func (UnimplementedRagServiceServer) UploadDocument(context.Context, *UploadRequest) (*UploadResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UploadDocument not implemented")
@@ -122,23 +131,16 @@ func RegisterRagServiceServer(s grpc.ServiceRegistrar, srv RagServiceServer) {
 	s.RegisterService(&RagService_ServiceDesc, srv)
 }
 
-func _RagService_Chat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ChatRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _RagService_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ChatRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(RagServiceServer).Chat(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RagService_Chat_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RagServiceServer).Chat(ctx, req.(*ChatRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(RagServiceServer).Chat(m, &grpc.GenericServerStream[ChatRequest, ChatResponse]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type RagService_ChatServer = grpc.ServerStreamingServer[ChatResponse]
 
 func _RagService_UploadDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UploadRequest)
@@ -166,14 +168,16 @@ var RagService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*RagServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Chat",
-			Handler:    _RagService_Chat_Handler,
-		},
-		{
 			MethodName: "UploadDocument",
 			Handler:    _RagService_UploadDocument_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Chat",
+			Handler:       _RagService_Chat_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "rag_service.proto",
 }

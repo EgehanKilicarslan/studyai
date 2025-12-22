@@ -34,30 +34,44 @@ func (h *Handler) ChatHandler(c *gin.Context) {
 		return
 	}
 
-	// gRPC Request
+	// 1. gRPC Request
 	grpcReq := &pb.ChatRequest{
 		Query:     reqBody.Query,
 		SessionId: reqBody.SessionID,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Simple check to prevent panic if Client is nil (e.g., in mock tests)
-	if h.ragClient == nil {
-		c.JSON(500, gin.H{"error": "RAG Service not connected"})
-		return
-	}
-
-	resp, err := h.ragClient.Service.Chat(ctx, grpcReq)
+	stream, err := h.ragClient.Service.Chat(ctx, grpcReq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{"error": "Failed to call RAG service"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"answer":  resp.Answer,
-		"sources": resp.SourceDocuments,
+	// 2. SSE Header Setup
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("Transfer-Encoding", "chunked")
+
+	// 3. Stream Responses
+	c.Stream(func(w io.Writer) bool {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return false // End of stream
+		}
+		if err != nil {
+			return false // Error occurred
+		}
+
+		c.SSEvent("message", gin.H{
+			"answer":  resp.Answer,
+			"sources": resp.SourceDocuments,
+			"time":    resp.ProcessingTimeMs,
+		})
+
+		return true // Continue streaming
 	})
 }
 
