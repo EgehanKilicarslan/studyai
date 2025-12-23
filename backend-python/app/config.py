@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     qdrant_collection: str = Field(default="school_docs")
 
     embedding_vector_size: int = Field(default=384)
+    embedding_chunk_size: int = Field(default=500)
+    embedding_chunk_overlap: int = Field(default=50)
 
     maximum_file_size: int = Field(default=50 * 1024 * 1024)  # 50 MB
 

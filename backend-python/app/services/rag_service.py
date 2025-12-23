@@ -1,10 +1,11 @@
 import re
 import time
 from pathlib import Path
-from typing import AsyncGenerator, List
+from typing import AsyncGenerator
 
 import fitz
 import grpc
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pb import rag_service_pb2 as rs
 from pb import rag_service_pb2_grpc as rs_grpc
 
@@ -16,12 +17,20 @@ from ..llm import LLMProvider
 
 class RagService(rs_grpc.RagServiceServicer):
     def __init__(
-        self, settings: Settings, llm_provider: LLMProvider, embedding_service: EmbeddingService
+        self,
+        settings: Settings,
+        llm_provider: LLMProvider,
+        embedding_service: EmbeddingService,
     ):
         self.llm: LLMProvider = llm_provider
         self.embedding_service: EmbeddingService = embedding_service
         self.max_file_size = settings.maximum_file_size
         self.allowed_file_types = {".pdf", ".txt", ".md"}
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.embedding_chunk_size,
+            chunk_overlap=settings.embedding_chunk_overlap,
+            separators=["\n\n", "\n", " ", ""],
+        )
 
     def _validate_upload(self, request: rs.UploadRequest) -> tuple[bool, str]:
         if len(request.file_content) > self.max_file_size:
@@ -35,44 +44,6 @@ class RagService(rs_grpc.RagServiceServicer):
             return False, "Invalid filename characters"
 
         return True, ""
-
-    def _chunk_text(self, text: str, chunk_size: int = 200, overlap: int = 50) -> List[str]:
-        """Split text into overlapping chunks."""
-        if not text or not text.strip():
-            return []
-
-        chunks = []
-        sentences = re.split(r"(?<=[.!?]) +", text)
-
-        # If no sentence boundaries found, split by words
-        if len(sentences) == 1 and len(text.split()) > chunk_size:
-            words = text.split()
-            for i in range(0, len(words), chunk_size - overlap):
-                chunk = " ".join(words[i : i + chunk_size])
-                chunks.append(chunk)
-            return chunks
-
-        current_chunk = []
-        current_size = 0
-
-        for sentence in sentences:
-            sentence_size = len(sentence.split())
-
-            if current_size + sentence_size > chunk_size and current_chunk:
-                chunks.append(" ".join(current_chunk))
-
-                # Keep last 'overlap' words for context
-                overlap_text = " ".join(" ".join(current_chunk).split()[-overlap:])
-                current_chunk = [overlap_text]
-                current_size = len(overlap_text.split())
-
-            current_chunk.append(sentence)
-            current_size += sentence_size
-
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-
-        return [c for c in chunks if c.strip()]  # Filter empty chunks
 
     async def UploadDocument(
         self, request: rs.UploadRequest, context: grpc.aio.ServicerContext
@@ -97,7 +68,7 @@ class RagService(rs_grpc.RagServiceServicer):
 
                         if isinstance(text, str) and text.strip():
                             # Chunk the page text instead of adding full pages
-                            page_chunks = self._chunk_text(text)
+                            page_chunks = self.text_splitter.split_text(text)
                             for chunk in page_chunks:
                                 text_chunks.append(chunk)
                                 metadatas.append({"filename": request.filename, "page": i + 1})
@@ -106,7 +77,7 @@ class RagService(rs_grpc.RagServiceServicer):
             else:
                 text = request.file_content.decode("utf-8")
                 # Chunk the text file content
-                file_chunks = self._chunk_text(text)
+                file_chunks = self.text_splitter.split_text(text)
                 for chunk in file_chunks:
                     text_chunks.append(chunk)
                     metadatas.append({"filename": request.filename, "page": 1})
