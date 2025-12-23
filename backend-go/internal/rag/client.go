@@ -38,9 +38,9 @@ func NewClient(addr string, useTLS bool) (*Client, error) {
 				grpc.MaxCallSendMsgSize(50*1024*1024),
 			),
 			grpc.WithKeepaliveParams(keepalive.ClientParameters{
-				Time:                10 * time.Second,
-				Timeout:             3 * time.Second,
-				PermitWithoutStream: true,
+				Time:                30 * time.Second,
+				Timeout:             10 * time.Second,
+				PermitWithoutStream: false,
 			}),
 		)...,
 	)
