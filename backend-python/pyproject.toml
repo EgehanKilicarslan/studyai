@@ -10,6 +10,7 @@ dependencies = [
     "google-genai>=1.56.0",
     "grpcio>=1.76.0",
     "grpcio-tools>=1.76.0",
+    "langchain-text-splitters>=1.1.0",
     "mypy-protobuf>=3.7.0",
     "openai>=2.14.0",
     "protobuf>=6.33.2",
