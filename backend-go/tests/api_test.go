@@ -20,9 +20,6 @@ import (
 	pb "github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/pb"
 )
 
-// --- MOCK DEFINITIONS ---
-
-// MockRagServiceClient, pb.RagServiceClient arayüzünü taklit eder
 type MockRagServiceClient struct {
 	mock.Mock
 }
@@ -37,7 +34,6 @@ func (m *MockRagServiceClient) UploadDocument(ctx context.Context, in *pb.Upload
 	return args.Get(0).(*pb.UploadResponse), args.Error(1)
 }
 
-// MockChatStream, streaming yanıtları taklit eder
 type MockChatStream struct {
 	grpc.ClientStream
 	mock.Mock
@@ -51,10 +47,6 @@ func (m *MockChatStream) Recv() (*pb.ChatResponse, error) {
 	return nil, args.Error(1)
 }
 
-// --- CUSTOM RESPONSE RECORDER ---
-
-// StreamRecorder, httptest.ResponseRecorder'ı sarmalar ve http.CloseNotifier arayüzünü uygular.
-// Gin'in c.Stream() fonksiyonu bu metoda ihtiyaç duyar.
 type StreamRecorder struct {
 	*httptest.ResponseRecorder
 	closeNotifyChan chan bool
@@ -67,22 +59,22 @@ func NewStreamRecorder() *StreamRecorder {
 	}
 }
 
-// CloseNotify, http.CloseNotifier arayüzünü tatmin eder
 func (w *StreamRecorder) CloseNotify() <-chan bool {
 	return w.closeNotifyChan
 }
 
-// --- TESTS ---
-
 func init() {
-	// Test modunda logları kapat
 	gin.SetMode(gin.TestMode)
 	gin.DefaultWriter = io.Discard
 }
 
+func setupRouter(ragClient *rag.Client) *gin.Engine {
+	handler := api.NewHandler(ragClient)
+	return api.SetupRouter(handler)
+}
+
 func TestHealthCheck(t *testing.T) {
-	handler := api.NewHandler(nil)
-	router := api.SetupRouter(handler)
+	router := setupRouter(nil)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/health", nil)
@@ -93,11 +85,10 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestChatHandler_Success(t *testing.T) {
-	// 1. Mock Kurulumu
+	// 1. ARRANGE
 	mockClient := new(MockRagServiceClient)
 	mockStream := new(MockChatStream)
 
-	// Stream yanıtlarını ayarla
 	mockStream.On("Recv").Return(&pb.ChatResponse{
 		Answer: "Hello from Go Test",
 	}, nil).Once()
@@ -105,32 +96,26 @@ func TestChatHandler_Success(t *testing.T) {
 
 	mockClient.On("Chat", mock.Anything, mock.Anything).Return(mockStream, nil)
 
-	ragClient := &rag.Client{
-		Service: mockClient,
-	}
+	ragClient := &rag.Client{Service: mockClient}
+	router := setupRouter(ragClient)
 
-	handler := api.NewHandler(ragClient)
-	router := api.SetupRouter(handler)
-
-	// 2. HTTP İsteği
 	reqBody := map[string]string{"query": "Hi", "session_id": "1"}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/api/chat", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
-	// DÜZELTME: httptest.NewRecorder() yerine özel StreamRecorder kullanıyoruz
 	w := NewStreamRecorder()
 
-	// 3. Çalıştır
+	// 2. ACT
 	router.ServeHTTP(w, req)
 
-	// 4. Doğrulama
+	// 3. ASSERT
 	assert.Equal(t, 200, w.Code)
 	assert.Contains(t, w.Body.String(), "Hello from Go Test")
 }
 
 func TestUploadHandler_Success(t *testing.T) {
-	// 1. Mock Kurulumu
+	// 1. ARRANGE
 	mockClient := new(MockRagServiceClient)
 
 	expectedResp := &pb.UploadResponse{
@@ -141,10 +126,8 @@ func TestUploadHandler_Success(t *testing.T) {
 	mockClient.On("UploadDocument", mock.Anything, mock.Anything).Return(expectedResp, nil)
 
 	ragClient := &rag.Client{Service: mockClient}
-	handler := api.NewHandler(ragClient)
-	router := api.SetupRouter(handler)
+	router := setupRouter(ragClient)
 
-	// 2. Multipart Upload İsteği
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
 	part, _ := writer.CreateFormFile("file", "test.txt")
@@ -156,10 +139,10 @@ func TestUploadHandler_Success(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	// 3. Çalıştır
+	// 2. ACT
 	router.ServeHTTP(w, req)
 
-	// 4. Doğrulama
+	// 3. ASSERT
 	assert.Equal(t, 200, w.Code)
 	assert.Contains(t, w.Body.String(), "success")
 	assert.Contains(t, w.Body.String(), "10")
