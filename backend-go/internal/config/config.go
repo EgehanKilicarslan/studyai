@@ -10,6 +10,7 @@ type Config struct {
 	ApiServicePort string
 	AIServiceAddr  string
 	MaxFileSize    int64
+	ChatTimeout    int64
 	UploadTimeout  int64
 }
 
@@ -18,6 +19,7 @@ func LoadConfig() *Config {
 		ApiServicePort: getEnv("API_SERVICE_PORT", "8080"),           // Default port 8080
 		AIServiceAddr:  getAIServiceAddr(),                           // Default localhost:50051
 		MaxFileSize:    getEnvAsInt64("MAX_FILE_SIZE", 10*1024*1024), // Default 10 MB
+		ChatTimeout:    getEnvAsInt64("CHAT_TIMEOUT", 120),           // Default 120 seconds
 		UploadTimeout:  getEnvAsInt64("UPLOAD_TIMEOUT", 300),         // Default 300 seconds
 	}
 }
