@@ -1,5 +1,6 @@
 import asyncio
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import AsyncGenerator, Dict, List, Tuple
@@ -46,19 +47,19 @@ class RagService(rs_grpc.RagServiceServicer):
 
         return True, ""
 
-    def _parse_document_sync(self, content: bytes, filename: str) -> Tuple[List[str], List[Dict]]:
+    def _parse_document_sync(self, file_path: str, filename: str) -> Tuple[List[str], List[Dict]]:
         """
         🛑 THIS METHOD CONTAINS CPU-INTENSIVE OPERATIONS (Runs synchronously).
         This method should be called within 'asyncio.to_thread'.
         """
-        print(f"[Worker Thread] Parsing file: {filename} ({len(content)} bytes)")
+        print(f"[Worker Thread] Parsing file: {filename} from {file_path}")
         text_chunks = []
         metadatas = []
 
         try:
             # A) PDF Processing
             if filename.lower().endswith(".pdf"):
-                with fitz.open(stream=content, filetype="pdf") as doc:
+                with fitz.open(file_path) as doc:
                     for i in range(len(doc)):
                         page = doc[i]
                         text = page.get_text()
@@ -73,7 +74,8 @@ class RagService(rs_grpc.RagServiceServicer):
 
             # B) Text/MD Processing
             else:
-                text = content.decode("utf-8")
+                with open(file_path, "r", encoding="utf-8") as f:
+                    text = f.read()
                 file_chunks = self.text_splitter.split_text(text)
                 for chunk in file_chunks:
                     text_chunks.append(chunk)
@@ -91,14 +93,19 @@ class RagService(rs_grpc.RagServiceServicer):
         request_iterator: AsyncGenerator[rs.UploadRequest, None],
         context: grpc.aio.ServicerContext,
     ) -> rs.UploadResponse:
-        file_content = bytearray()
         filename = "unknown"
         current_size = 0
+        temp_file = None
+        temp_file_path = None
 
         print("[RagService] UploadDocument stream started...")
 
         try:
-            # 1. Stream Loop (Non-blocking I/O)
+            # Create temporary file
+            temp_file = tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".tmp")
+            temp_file_path = temp_file.name
+
+            # 1. Stream Loop (Non-blocking I/O) - Write to temp file
             async for request in request_iterator:
                 # Is Metadata present?
                 if request.HasField("metadata"):
@@ -116,17 +123,19 @@ class RagService(rs_grpc.RagServiceServicer):
                         msg = f"Limit exceeded ({self.max_file_size} bytes)."
                         return rs.UploadResponse(status="error", message=msg)
 
-                    file_content.extend(request.chunk)
+                    # Write chunk to temp file asynchronously
+                    await asyncio.to_thread(temp_file.write, request.chunk)
                     current_size += chunk_len
+
+            # Close the temp file
+            temp_file.close()
 
             if current_size == 0:
                 return rs.UploadResponse(status="warning", message="Received empty file.")
 
-            # 3. Send CPU-Intensive Task to Thread (Parsing)
-            final_bytes = bytes(file_content)
-
+            # 3. Send CPU-Intensive Task to Thread (Parsing from temp file)
             text_chunks, metadatas = await asyncio.to_thread(
-                self._parse_document_sync, final_bytes, filename
+                self._parse_document_sync, temp_file_path, filename
             )
 
             if not text_chunks:
@@ -150,6 +159,14 @@ class RagService(rs_grpc.RagServiceServicer):
         except Exception as e:
             print(f"❌ Upload Error: {e}")
             return rs.UploadResponse(status="error", chunks_count=0, message=str(e))
+
+        finally:
+            # Cleanup: Close and delete temp file
+            if temp_file and not temp_file.closed:
+                temp_file.close()
+            if temp_file_path and Path(temp_file_path).exists():
+                await asyncio.to_thread(Path(temp_file_path).unlink)
+                print(f"[RagService] Cleaned up temp file: {temp_file_path}")
 
     async def Chat(
         self, request: rs.ChatRequest, context: grpc.aio.ServicerContext
