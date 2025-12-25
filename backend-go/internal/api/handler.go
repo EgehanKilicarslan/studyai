@@ -91,35 +91,86 @@ func (h *Handler) ChatHandler(c *gin.Context) {
 }
 
 func (h *Handler) UploadHandler(c *gin.Context) {
-	// 1. Get the file from the request
-	file, header, err := c.Request.FormFile("file")
+	// 1. Parse File
+	header, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(400, gin.H{"error": "Could not get uploaded file"})
+		c.JSON(400, gin.H{"error": "File not provided"})
+		return
+	}
+
+	// 2. Validate File Size
+	if header.Size > h.Config.MaxFileSize {
+		c.JSON(400, gin.H{"error": fmt.Sprintf("File size exceeds the limit of %dMB", h.Config.MaxFileSize/(1024*1024))})
+		return
+	}
+
+	file, err := header.Open()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Could not open the uploaded file"})
 		return
 	}
 	defer file.Close()
 
-	// 2. Read file content
-	content, err := io.ReadAll(file)
+	// 3. gRPC Stream to RAG Service
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(h.Config.UploadTimeout)*time.Second)
+	defer cancel()
+
+	stream, err := h.ragClient.Service.UploadDocument(ctx)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Could not read uploaded file"})
+		c.JSON(500, gin.H{"error": "Could not connect to RAG Service"})
 		return
 	}
 
-	// 3. gRPC Request
-	grpcReq := &pb.UploadRequest{
-		Filename:    header.Filename,
-		ContentType: header.Header.Get("Content-Type"),
-		FileContent: content,
+	// 4. Send Metadata
+	reqMeta := &pb.UploadRequest{
+		Data: &pb.UploadRequest_Metadata{
+			Metadata: &pb.UploadMetadata{
+				Filename:    header.Filename,
+				ContentType: header.Header.Get("Content-Type"),
+			},
+		},
+	}
+	if err := stream.Send(reqMeta); err != nil {
+		c.JSON(500, gin.H{"error": "Could not send metadata to RAG Service"})
+		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+	// 5. Stream File Chunks
+	buffer := make([]byte, 32*1024) // 32KB buffer
+	var totalBytesSent int64 = 0
 
-	// 4. Send to RAG service
-	resp, err := h.ragClient.Service.UploadDocument(ctx, grpcReq)
+	for {
+		n, err := file.Read(buffer)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Error reading the file"})
+			return
+		}
+
+		// ** Live Size Check **
+		totalBytesSent += int64(n)
+		if totalBytesSent > h.Config.MaxFileSize {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("File size exceeds the limit of %dMB", h.Config.MaxFileSize/(1024*1024))})
+			return
+		}
+
+		reqChunk := &pb.UploadRequest{
+			Data: &pb.UploadRequest_Chunk{
+				Chunk: buffer[:n], // Send only the read bytes
+			},
+		}
+		if err := stream.Send(reqChunk); err != nil {
+			c.JSON(500, gin.H{"error": "Could not send file chunk to RAG Service"})
+			return
+		}
+	}
+
+	// 6. Close and Receive Response
+	resp, err := stream.CloseAndRecv()
 	if err != nil {
-		c.JSON(500, gin.H{"error": fmt.Sprintf("Processing error: %v", err)})
+		c.JSON(500, gin.H{"error": "Error receiving response from RAG Service"})
 		return
 	}
 
