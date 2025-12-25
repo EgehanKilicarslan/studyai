@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, Mock, PropertyMock
 
 import pytest
 from app.services.rag_service import RagService
+from pb import rag_service_pb2 as rs
 
 
 async def async_iter(items):
@@ -60,18 +61,21 @@ async def test_chat_success_scenario(rag_service, mock_llm, mock_embedding_servi
         ]
     )
 
-    mock_request = Mock(query="Test Question", session_id="123")
+    mock_request = rs.ChatRequest(query="Test Question", session_id="123")
     mock_context = Mock()
 
     # 2. ACT
     responses = [res async for res in rag_service.Chat(request=mock_request, context=mock_context)]
 
     # 3. ASSERT
+    # LLM parts (3 parts) + Source info (1 part) = Total 4 responses expected
     assert len(responses) == 4
 
+    # Is the combined answer correct?
     full_answer = "".join([r.answer for r in responses])
     assert "Hello from Python!" in full_answer
 
+    # Does the last message contain sources?
     last_response = responses[-1]
     assert len(last_response.source_documents) == 1
     assert last_response.source_documents[0].filename == "doc.pdf"
@@ -85,12 +89,20 @@ async def test_upload_document_success(mock_settings, mock_embedding_service):
     # 1. ARRANGE
     service = RagService(mock_settings, Mock(), mock_embedding_service)
 
-    mock_request = Mock()
-    mock_request.filename = "test_notes.txt"
-    mock_request.file_content = b"This is a test content. " * 50
+    # Create upload stream with metadata and chunks
+    async def mock_request_iterator():
+        # First yield metadata
+        yield rs.UploadRequest(
+            metadata=rs.UploadMetadata(filename="test_notes.txt", content_type="text/plain")
+        )
+        # Then yield file content as chunks
+        content = b"This is a test content. " * 50
+        yield rs.UploadRequest(chunk=content)
 
     # 2. ACT
-    response = await service.UploadDocument(request=mock_request, context=Mock())
+    response = await service.UploadDocument(
+        request_iterator=mock_request_iterator(), context=Mock()
+    )
 
     # 3. ASSERT
     assert response.status == "success"
@@ -105,21 +117,27 @@ async def test_upload_document_validation_error(mock_settings):
     """
     service = RagService(mock_settings, Mock(), Mock())
 
-    mock_request = Mock()
-    mock_request.filename = "virus.exe"
-    mock_request.file_content = b"binary data"
+    async def mock_request_iterator():
+        yield rs.UploadRequest(
+            metadata=rs.UploadMetadata(
+                filename="virus.exe", content_type="application/octet-stream"
+            )
+        )
+        yield rs.UploadRequest(chunk=b"binary data")
 
-    response = await service.UploadDocument(request=mock_request, context=Mock())
+    response = await service.UploadDocument(
+        request_iterator=mock_request_iterator(), context=Mock()
+    )
 
     assert response.status == "error"
-    assert "is not supported" in response.message
+    assert "Unsupported file type" in response.message
 
 
 @pytest.mark.asyncio
 async def test_chat_with_empty_query(rag_service, mock_llm):
     """Test handling of empty query."""
     mock_llm.generate_response = MagicMock(return_value=async_iter(["No query provided"]))
-    mock_request = Mock(query="", session_id="123")
+    mock_request = rs.ChatRequest(query="", session_id="123")
 
     responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
 
@@ -130,7 +148,7 @@ async def test_chat_with_empty_query(rag_service, mock_llm):
 async def test_chat_with_long_query(rag_service, mock_llm):
     """Test handling of very long queries."""
     mock_llm.generate_response = MagicMock(return_value=async_iter(["Response to long query"]))
-    mock_request = Mock(query="x" * 10000, session_id="123")
+    mock_request = rs.ChatRequest(query="x" * 10000, session_id="123")
 
     responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
 
@@ -144,7 +162,7 @@ async def test_chat_error_handling(rag_service, mock_llm, mock_embedding_service
         return_value=async_iter(["Error generating response: Test error"])
     )
     mock_embedding_service.search = Mock(side_effect=Exception("DB Error"))
-    mock_request = Mock(query="test", session_id="123")
+    mock_request = rs.ChatRequest(query="test", session_id="123")
 
     responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
 
@@ -155,7 +173,7 @@ async def test_chat_error_handling(rag_service, mock_llm, mock_embedding_service
 @pytest.mark.asyncio
 async def test_chat_returns_processing_time(rag_service):
     """Test that processing time is included in response."""
-    mock_request = Mock(query="test", session_id="123")
+    mock_request = rs.ChatRequest(query="test", session_id="123")
 
     responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
 
@@ -168,7 +186,7 @@ async def test_chat_passes_context_docs_to_llm(rag_service, mock_llm, mock_embed
     mock_embedding_service.search = Mock(
         return_value=[{"content": "Doc1", "metadata": {}, "score": 0.9}]
     )
-    mock_request = Mock(query="test", session_id="123")
+    mock_request = rs.ChatRequest(query="test", session_id="123")
 
     await rag_service.Chat(request=mock_request, context=Mock()).__anext__()
 
@@ -180,7 +198,7 @@ async def test_chat_passes_context_docs_to_llm(rag_service, mock_llm, mock_embed
 @pytest.mark.asyncio
 async def test_chat_passes_empty_history(rag_service, mock_llm):
     """Test that empty history is passed to LLM."""
-    mock_request = Mock(query="test", session_id="123")
+    mock_request = rs.ChatRequest(query="test", session_id="123")
 
     await rag_service.Chat(request=mock_request, context=Mock()).__anext__()
 
