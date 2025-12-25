@@ -30,9 +30,12 @@ func (m *MockRagServiceClient) Chat(ctx context.Context, in *pb.ChatRequest, opt
 	return args.Get(0).(pb.RagService_ChatClient), args.Error(1)
 }
 
-func (m *MockRagServiceClient) UploadDocument(ctx context.Context, in *pb.UploadRequest, opts ...grpc.CallOption) (*pb.UploadResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.UploadResponse), args.Error(1)
+func (m *MockRagServiceClient) UploadDocument(ctx context.Context, opts ...grpc.CallOption) (pb.RagService_UploadDocumentClient, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(pb.RagService_UploadDocumentClient), args.Error(1)
 }
 
 type MockChatStream struct {
@@ -46,6 +49,21 @@ func (m *MockChatStream) Recv() (*pb.ChatResponse, error) {
 		return resp.(*pb.ChatResponse), args.Error(1)
 	}
 	return nil, args.Error(1)
+}
+
+type MockUploadStream struct {
+	grpc.ClientStream
+	mock.Mock
+}
+
+func (m *MockUploadStream) Send(req *pb.UploadRequest) error {
+	args := m.Called(req)
+	return args.Error(0)
+}
+
+func (m *MockUploadStream) CloseAndRecv() (*pb.UploadResponse, error) {
+	args := m.Called()
+	return args.Get(0).(*pb.UploadResponse), args.Error(1)
 }
 
 type StreamRecorder struct {
@@ -74,6 +92,7 @@ func setupRouter(ragClient *rag.Client) *gin.Engine {
 		ApiServicePort: "8080",
 		AIServiceAddr:  "localhost:50051",
 		MaxFileSize:    10 * 1024 * 1024,
+		UploadTimeout:  300,
 	}
 	handler := api.NewHandler(ragClient, cfg)
 	return api.SetupRouter(handler)
@@ -123,13 +142,21 @@ func TestChatHandler_Success(t *testing.T) {
 func TestUploadHandler_Success(t *testing.T) {
 	// 1. ARRANGE
 	mockClient := new(MockRagServiceClient)
+	mockUploadStream := new(MockUploadStream)
 
+	// Mock the stream creation
+	mockClient.On("UploadDocument", mock.Anything).Return(mockUploadStream, nil)
+
+	// Mock Send calls (metadata + chunks)
+	mockUploadStream.On("Send", mock.AnythingOfType("*pb.UploadRequest")).Return(nil)
+
+	// Mock the final response
 	expectedResp := &pb.UploadResponse{
 		Status:      "success",
 		Message:     "File uploaded",
 		ChunksCount: 10,
 	}
-	mockClient.On("UploadDocument", mock.Anything, mock.Anything).Return(expectedResp, nil)
+	mockUploadStream.On("CloseAndRecv").Return(expectedResp, nil)
 
 	ragClient := &rag.Client{Service: mockClient}
 	router := setupRouter(ragClient)
@@ -152,4 +179,7 @@ func TestUploadHandler_Success(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 	assert.Contains(t, w.Body.String(), "success")
 	assert.Contains(t, w.Body.String(), "10")
+
+	mockClient.AssertExpectations(t)
+	mockUploadStream.AssertExpectations(t)
 }
