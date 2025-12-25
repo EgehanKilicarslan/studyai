@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, Mock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 
 import pytest
 from app.services.rag_service import RagService
@@ -33,8 +33,8 @@ def mock_llm():
 def mock_embedding_service():
     """Common embedding service mock for all tests."""
     service = Mock()
-    service.search = Mock(return_value=[])
-    service.add_documents = Mock(return_value=5)
+    service.search = AsyncMock(return_value=[])
+    service.add_documents = AsyncMock(return_value=5)
     return service
 
 
@@ -51,7 +51,7 @@ async def test_chat_success_scenario(rag_service, mock_llm, mock_embedding_servi
     """
     # 1. ARRANGE
     mock_llm.generate_response = MagicMock(return_value=async_iter(["Hello ", "from ", "Python!"]))
-    mock_embedding_service.search = Mock(
+    mock_embedding_service.search = AsyncMock(
         return_value=[
             {
                 "content": "Context info",
@@ -100,9 +100,22 @@ async def test_upload_document_success(mock_settings, mock_embedding_service):
         yield rs.UploadRequest(chunk=content)
 
     # 2. ACT
-    response = await service.UploadDocument(
-        request_iterator=mock_request_iterator(), context=Mock()
-    )
+    # Mock the _parse_document_sync to return expected chunks
+    with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
+        # First call is for file write (we don't care about return)
+        # Subsequent calls are for parse_document_sync
+        mock_to_thread.side_effect = [
+            None,  # temp_file.write
+            (  # _parse_document_sync
+                ["chunk1", "chunk2", "chunk3", "chunk4", "chunk5"],
+                [{"filename": "test_notes.txt", "page": 1}] * 5,
+            ),
+            None,  # Path.unlink
+        ]
+
+        response = await service.UploadDocument(
+            request_iterator=mock_request_iterator(), context=Mock()
+        )
 
     # 3. ASSERT
     assert response.status == "success"
@@ -161,7 +174,7 @@ async def test_chat_error_handling(rag_service, mock_llm, mock_embedding_service
     mock_llm.generate_response = MagicMock(
         return_value=async_iter(["Error generating response: Test error"])
     )
-    mock_embedding_service.search = Mock(side_effect=Exception("DB Error"))
+    mock_embedding_service.search = AsyncMock(side_effect=Exception("DB Error"))
     mock_request = rs.ChatRequest(query="test", session_id="123")
 
     responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
@@ -183,7 +196,7 @@ async def test_chat_returns_processing_time(rag_service):
 @pytest.mark.asyncio
 async def test_chat_passes_context_docs_to_llm(rag_service, mock_llm, mock_embedding_service):
     """Test that context documents are passed to LLM."""
-    mock_embedding_service.search = Mock(
+    mock_embedding_service.search = AsyncMock(
         return_value=[{"content": "Doc1", "metadata": {}, "score": 0.9}]
     )
     mock_request = rs.ChatRequest(query="test", session_id="123")
