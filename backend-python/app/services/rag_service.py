@@ -32,55 +32,94 @@ class RagService(rs_grpc.RagServiceServicer):
             separators=["\n\n", "\n", " ", ""],
         )
 
-    def _validate_upload(self, request: rs.UploadRequest) -> tuple[bool, str]:
-        if len(request.file_content) > self.max_file_size:
-            return False, f"File size exceeds the maximum limit of {self.max_file_size} bytes."
-
-        file_ext = Path(request.filename).suffix.lower()
+    def _validate_filename(self, filename: str) -> tuple[bool, str]:
+        file_ext = Path(filename).suffix.lower()
         if file_ext not in self.allowed_file_types:
-            return False, f"File type '{file_ext}' is not supported."
+            return (
+                False,
+                f"Unsupported file type: {file_ext}. Allowed types are: {', '.join(self.allowed_file_types)}",
+            )
 
-        if not re.match(r"^[\w\-. ]+$", request.filename):
+        if not re.match(r"^[\w\-. ]+$", filename):
             return False, "Invalid filename characters"
 
         return True, ""
 
     async def UploadDocument(
-        self, request: rs.UploadRequest, context: grpc.aio.ServicerContext
+        self,
+        request_iterator: AsyncGenerator[rs.UploadRequest, None],
+        context: grpc.aio.ServicerContext,
     ) -> rs.UploadResponse:
-        print(
-            f"[RagService] UploadDocument called with filename: {request.filename} ({len(request.file_content)} bytes)"
-        )
+        file_content = bytearray()
+        filename = "unknown"
+        content_type = ""
+        current_size = 0
 
-        is_valid, error_msg = self._validate_upload(request)
-        if not is_valid:
-            return rs.UploadResponse(status="error", chunks_count=0, message=error_msg)
+        print("[RagService] UploadDocument stream started...")
 
         try:
+            # 1. Stream loop
+            async for request in request_iterator:
+                # A) Is metadata present?
+                if request.HasField("metadata"):
+                    filename = request.metadata.filename
+                    content_type = request.metadata.content_type
+                    print(f"[RagService] Receiving file: {filename} (Type: {content_type})")
+
+                    # Validate filename and type
+                    is_valid, err_msg = self._validate_filename(filename)
+                    if not is_valid:
+                        return rs.UploadResponse(status="error", message=err_msg)
+
+                # B) Is chunk present?
+                elif request.HasField("chunk"):
+                    chunk_data = request.chunk
+                    chunk_len = len(chunk_data)
+
+                    # File size check
+                    if current_size + chunk_len > self.max_file_size:
+                        msg = f"File size limit exceeded ({self.max_file_size} bytes)."
+                        print(f"❌ {msg}")
+                        return rs.UploadResponse(status="error", message=msg)
+
+                    # Accumulate chunk
+                    file_content.extend(chunk_data)
+                    current_size += chunk_len
+
+            # 2. Stream ended, file ready
+            print(f"[RagService] Upload complete. Total size: {current_size} bytes.")
+
+            if current_size == 0:
+                return rs.UploadResponse(status="warning", message="Received empty file.")
+
+            # 3. Convert to bytes
+            final_file_bytes = bytes(file_content)
+
             text_chunks = []
             metadatas = []
 
-            if request.filename.lower().endswith(".pdf"):
-                with fitz.open(stream=request.file_content, filetype="pdf") as doc:
+            # 4. PDF Processing
+            if filename.lower().endswith(".pdf"):
+                with fitz.open(stream=final_file_bytes, filetype="pdf") as doc:
                     for i in range(len(doc)):
                         page = doc[i]
                         text = page.get_text()
 
                         if isinstance(text, str) and text.strip():
-                            # Chunk the page text instead of adding full pages
                             page_chunks = self.text_splitter.split_text(text)
                             for chunk in page_chunks:
                                 text_chunks.append(chunk)
-                                metadatas.append({"filename": request.filename, "page": i + 1})
+                                metadatas.append({"filename": filename, "page": i + 1})
 
                 print(f"[RagService] Extracted {len(text_chunks)} text chunks from PDF.")
+
+            # 4. Text/MD Processing
             else:
-                text = request.file_content.decode("utf-8")
-                # Chunk the text file content
+                text = final_file_bytes.decode("utf-8")
                 file_chunks = self.text_splitter.split_text(text)
                 for chunk in file_chunks:
                     text_chunks.append(chunk)
-                    metadatas.append({"filename": request.filename, "page": 1})
+                    metadatas.append({"filename": filename, "page": 1})
                 print("[RagService] Extracted text from non-PDF document.")
 
             if not text_chunks:
@@ -90,22 +129,21 @@ class RagService(rs_grpc.RagServiceServicer):
                     message="No text extracted from the document.",
                 )
 
-            print(f"[DEBUG] About to add {len(text_chunks)} chunks to embedding service")
+            # 5. Add to Embedding Service
             count = self.embedding_service.add_documents(documents=text_chunks, metadatas=metadatas)
-            print(f"[DEBUG] Embedding service returned count: {count}")
 
+            # 6. Return response
             return rs.UploadResponse(
                 status="success",
                 chunks_count=count,
-                message=f"Successfully indexed {count} chunks using PyMuPDF.",
+                message=f"Successfully processed and indexed {count} chunks.",
             )
-        except Exception as e:
-            print(f"❌ Upload Error: {e}")
 
+        except Exception as e:
+            print(f"❌ Upload Processing Error: {e}")
             import traceback
 
             traceback.print_exc()
-
             return rs.UploadResponse(status="error", chunks_count=0, message=str(e))
 
     async def Chat(
