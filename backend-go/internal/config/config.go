@@ -17,7 +17,7 @@ type Config struct {
 func LoadConfig() *Config {
 	return &Config{
 		ApiServicePort: getEnv("API_SERVICE_PORT", "8080"),           // Default port 8080
-		AIServiceAddr:  getAIServiceAddr(),                           // Default localhost:50051
+		AIServiceAddr:  getAIServiceAddr(),                           // Default backend-python:50051
 		MaxFileSize:    getEnvAsInt64("MAX_FILE_SIZE", 10*1024*1024), // Default 10 MB
 		ChatTimeout:    getEnvAsInt64("CHAT_TIMEOUT", 120),           // Default 120 seconds
 		UploadTimeout:  getEnvAsInt64("UPLOAD_TIMEOUT", 300),         // Default 300 seconds
@@ -41,7 +41,7 @@ func getEnvAsInt64(key string, fallback int64) int64 {
 }
 
 func getAIServiceAddr() string {
-	host := getEnv("AI_SERVICE_HOST", "localhost")
+	host := getEnv("AI_SERVICE_HOST", "backend-python")
 	port := getEnv("AI_SERVICE_PORT", "50051")
 	return fmt.Sprintf("%s:%s", host, port)
 }
