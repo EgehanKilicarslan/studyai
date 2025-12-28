@@ -93,10 +93,11 @@ class RagService(rs_grpc.RagServiceServicer):
         request_iterator: AsyncGenerator[rs.UploadRequest, None],
         context: grpc.aio.ServicerContext,
     ) -> rs.UploadResponse:
-        filename = "unknown"
+        filename = None  # Changed from "unknown" to None
         current_size = 0
         temp_file = None
         temp_file_path = None
+        metadata_received = False  # Track if metadata was received
 
         print("[RagService] UploadDocument stream started...")
 
@@ -109,7 +110,15 @@ class RagService(rs_grpc.RagServiceServicer):
             async for request in request_iterator:
                 # Is Metadata present?
                 if request.HasField("metadata"):
+                    if metadata_received:
+                        return rs.UploadResponse(
+                            status="error",
+                            message="Metadata already received. Multiple metadata messages not allowed.",
+                        )
+
                     filename = request.metadata.filename
+                    metadata_received = True
+
                     # Validation
                     is_valid, err_msg = self._validate_filename(filename)
                     if not is_valid:
@@ -117,6 +126,13 @@ class RagService(rs_grpc.RagServiceServicer):
 
                 # Is Chunk present?
                 elif request.HasField("chunk"):
+                    # Enforce metadata-first rule
+                    if not metadata_received:
+                        return rs.UploadResponse(
+                            status="error",
+                            message="Security violation: Metadata must be sent before any file chunks.",
+                        )
+
                     chunk_len = len(request.chunk)
 
                     if current_size + chunk_len > self.max_file_size:
@@ -129,6 +145,12 @@ class RagService(rs_grpc.RagServiceServicer):
 
             # Close the temp file
             temp_file.close()
+
+            # Ensure metadata was received
+            if not metadata_received or filename is None:
+                return rs.UploadResponse(
+                    status="error", message="Invalid upload: No metadata received."
+                )
 
             if current_size == 0:
                 return rs.UploadResponse(status="warning", message="Received empty file.")
