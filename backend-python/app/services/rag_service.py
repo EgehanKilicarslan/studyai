@@ -228,7 +228,7 @@ class RagService(rs_grpc.RagServiceServicer):
         print(f"[RagService] Question received: {request.query} | Session ID: {request.session_id}")
 
         try:
-            search_results = await self.embedding_service.search(request.query, limit=3)
+            search_results = await self.embedding_service.search(request.query)
 
             context_docs = [hit["content"] for hit in search_results]
 

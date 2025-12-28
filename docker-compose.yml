@@ -10,7 +10,7 @@ services:
     env_file:
       - .env
     volumes:
-      - fastembed_cache:/root/.cache/fastembed
+      - models:/home/appuser/.cache/models
     depends_on:
       - vector-db
     networks:
@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  fastembed_cache:
+  models:
     driver: local
   qdrant_storage:
     driver: local

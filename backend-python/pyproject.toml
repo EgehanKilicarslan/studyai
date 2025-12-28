@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=0.75.0",
     "dependency-injector>=4.48.3",
     "fastembed>=0.7.4",
+    "flashrank>=0.2.10",
     "google-genai>=1.56.0",
     "grpcio>=1.76.0",
     "grpcio-tools>=1.76.0",

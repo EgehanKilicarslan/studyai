@@ -3,6 +3,7 @@ import uuid
 from typing import Any, Dict, List
 
 from fastembed import TextEmbedding
+from flashrank import Ranker, RerankRequest
 from qdrant_client import AsyncQdrantClient, QdrantClient, models
 
 from app.config import Settings
@@ -21,10 +22,16 @@ class EmbeddingService:
         self.collection_name = settings.qdrant_collection
         self.vector_size = settings.embedding_vector_size
 
-        print(f"📦 [EmbeddingService] Connecting to Qdrant at {self.host}:{self.port}")
-
         # Load the BGE small embedding model (384 dimensions)
-        self.embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        self.embedding_model = TextEmbedding(
+            model_name="BAAI/bge-small-en-v1.5", cache_dir="/home/appuser/.cache/models"
+        )
+
+        # Load the ranker model for semantic search ranking
+        self.ranker = Ranker(
+            model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/home/appuser/.cache/models"
+        )
+        print(f"📦 [EmbeddingService] Connecting to Qdrant at {self.host}:{self.port}")
 
         # Use synchronous client for initialization to ensure collection exists
         sync_client = QdrantClient(host=self.host, port=self.port)
@@ -97,13 +104,13 @@ class EmbeddingService:
 
         return total_points
 
-    async def search(self, query: str, limit: int = 3) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
         Perform semantic search for similar documents.
 
         Args:
             query: Search query text
-            limit: Maximum number of results to return (default: 3)
+            limit: Maximum number of results to return (default: 5)
 
         Returns:
             List of dicts containing content, metadata, and similarity score
@@ -114,21 +121,40 @@ class EmbeddingService:
 
         # Query Qdrant for similar vectors
         search_result = await self.client.query_points(
-            collection_name=self.collection_name, query=query_vec, limit=limit
+            collection_name=self.collection_name,
+            query=query_vec,
+            limit=25,
+            with_payload=True,
         )
+
+        if not search_result.points:
+            return []
 
         hits = search_result.points
 
-        # Format results with content, metadata, and similarity score
-        return [
+        passages = [
             {
-                "content": hit.payload.get("page_content", "") if hit.payload else "",
-                "metadata": {k: v for k, v in hit.payload.items() if k != "page_content"}
-                if hit.payload
-                else {},
-                "score": hit.score,  # Cosine similarity score (higher = more similar)
+                "id": hit.id,
+                "text": hit.payload.get("page_content", "") if hit.payload else "",
+                "meta": hit.payload,
             }
             for hit in hits
+        ]
+
+        rerank_request = RerankRequest(query=query, passages=passages)
+        results = self.ranker.rerank(rerank_request)
+
+        final_results = results[:limit]
+
+        return [
+            {
+                "content": res["text"],
+                "metadata": {k: v for k, v in res["meta"].items() if k != "page_content"}
+                if res.get("meta")
+                else {},
+                "score": res.get("score", 0.0),
+            }
+            for res in final_results
         ]
 
     async def close(self):

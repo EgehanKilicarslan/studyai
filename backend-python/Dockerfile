@@ -24,6 +24,7 @@ WORKDIR /app
 RUN addgroup --system appgroup && adduser --system --group appuser
 
 RUN mkdir -p /home/appuser/.cache/huggingface && \
+    mkdir -p /home/appuser/.cache/models && \
     chown -R appuser:appgroup /home/appuser/.cache
 
 COPY --from=builder /dist /app/libs
