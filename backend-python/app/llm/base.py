@@ -4,7 +4,7 @@ from typing import AsyncGenerator, Dict, List
 
 class LLMProvider(ABC):
     """
-    All LLM providers (OpenAI, Gemini, Local, Colab, etc.) should inherit from this base class.
+    All LLM providers (OpenAI, Gemini etc.) should inherit from this base class.
     """
 
     DEFAULT_SYSTEM_PROMPT: str = (

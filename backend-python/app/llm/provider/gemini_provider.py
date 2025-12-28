@@ -1,14 +1,20 @@
 from typing import AsyncGenerator, Dict, List
 
 from google.genai import Client
-from google.genai.types import GenerateContentConfig
+from google.genai.types import GenerateContentConfig, HttpOptions, ThinkingConfig
 
 from ..base import LLMProvider
 
 
 class GeminiProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str, timeout: float) -> None:
-        self.client = Client(api_key=api_key).aio
+    def __init__(self, base_url: str | None, api_key: str, model: str, timeout: float) -> None:
+        self.client = Client(
+            api_key=api_key,
+            http_options=HttpOptions(
+                base_url=base_url,
+                timeout=int(timeout),
+            ),
+        ).aio
         self.model = model
 
     async def generate_response(
@@ -28,6 +34,7 @@ class GeminiProvider(LLMProvider):
                     system_instruction=super().DEFAULT_SYSTEM_PROMPT,
                     max_output_tokens=1024,
                     temperature=0.1,
+                    thinking_config=ThinkingConfig(include_thoughts=False),
                 ),
             )
 
