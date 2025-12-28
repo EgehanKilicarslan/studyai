@@ -5,6 +5,7 @@ description = "Backend service for RAG Assistant"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "anthropic>=0.75.0",
     "dependency-injector>=4.48.3",
     "fastembed>=0.7.4",
     "google-genai>=1.56.0",

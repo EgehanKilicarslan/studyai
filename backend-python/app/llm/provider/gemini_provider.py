@@ -24,14 +24,14 @@ class GeminiProvider(LLMProvider):
         if history:
             messages.extend(history)
 
-        messages.append(super()._build_context_prompt(query, context_docs))
+        messages.append(self._build_context_prompt(query, context_docs))
 
         try:
             response = await self.client.models.generate_content_stream(
                 model=self.model,
                 contents=messages,
                 config=GenerateContentConfig(
-                    system_instruction=super().DEFAULT_SYSTEM_PROMPT,
+                    system_instruction=self.DEFAULT_SYSTEM_PROMPT,
                     max_output_tokens=1024,
                     temperature=0.1,
                     thinking_config=ThinkingConfig(include_thoughts=False),

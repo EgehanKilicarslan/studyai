@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     python_port: int = Field(default=50051)
 
-    llm_provider: str = Field(default="dummy")
+    llm_provider: str = Field(default="dummy", pattern="^(openai|gemini|anthropic|dummy)$")
     llm_base_url: Optional[str] = Field(default=None)
     llm_api_key: Optional[str] = Field(default=None)
 
@@ -29,15 +29,9 @@ class Settings(BaseSettings):
     def validate_provider(self) -> "Settings":
         """Validate and normalize the LLM provider"""
         v = self.llm_provider.lower()
-        valid_providers = ["openai", "gemini", "dummy"]
-
-        if v not in valid_providers:
-            raise ValueError(
-                f"Invalid LLM provider. Valid options are: {', '.join(valid_providers)}"
-            )
 
         # API key checks
-        if v in {"openai", "gemini"} and not self.llm_api_key:
+        if v in {"openai", "gemini", "anthropic"} and not self.llm_api_key:
             raise ValueError(f"{v.capitalize()} selected but LLM_API_KEY is missing")
 
         self.llm_provider = v

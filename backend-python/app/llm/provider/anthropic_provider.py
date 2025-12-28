@@ -1,41 +1,36 @@
-from typing import AsyncGenerator, Dict, List, cast
+from typing import AsyncGenerator, Dict, List
 
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionStreamOptionsParam
+from anthropic import AsyncAnthropic
+from anthropic.types import TextDelta
 
 from ..base import LLMProvider
 
 
-class OpenAIProvider(LLMProvider):
+class AnthropicProvider(LLMProvider):
     def __init__(self, base_url: str | None, api_key: str, model: str, timeout: float) -> None:
-        self.client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
+        self.client = AsyncAnthropic(base_url=base_url, api_key=api_key, timeout=timeout)
         self.model = model
 
     async def generate_response(
         self, query: str, context_docs: List[str], history: List[Dict[str, str]]
     ) -> AsyncGenerator[str, None]:
-        messages: List[ChatCompletionMessageParam] = []
+        messages = []
 
         if history:
-            messages.extend(
-                cast(
-                    List[ChatCompletionMessageParam],
-                    [{"role": h["role"], "content": h["content"]} for h in history],
-                )
-            )
+            messages.extend([{"role": h["role"], "content": h["content"]} for h in history])
 
         messages.append(
             {"role": "user", "content": self._build_context_prompt(query, context_docs)}
         )
 
         try:
-            response = await self.client.chat.completions.create(
+            response = await self.client.messages.create(
                 model=self.model,
+                system=self.DEFAULT_SYSTEM_PROMPT,
                 messages=messages,
                 temperature=0.1,
                 max_tokens=1024,
                 stream=True,
-                stream_options=ChatCompletionStreamOptionsParam(include_usage=False),
             )
 
             if not response:
@@ -52,8 +47,15 @@ class OpenAIProvider(LLMProvider):
             END_TAGS = ["</think>", "</thinking>"]
 
             async for chunk in response:
-                # Extract content from the current chunk
-                content = chunk.choices[0].delta.content
+                # Handle different chunk types from Anthropic
+                if chunk.type == "content_block_delta":
+                    if isinstance(chunk.delta, TextDelta):
+                        content = chunk.delta.text
+                    else:
+                        continue
+                else:
+                    continue
+
                 if not content:
                     continue
 
@@ -122,8 +124,8 @@ class OpenAIProvider(LLMProvider):
                 yield buffer
 
         except Exception as e:
-            yield f"Error generating response (OpenAI): {str(e)}"
+            yield f"Error generating response (Anthropic): {str(e)}"
 
     @property
     def provider_name(self) -> str:
-        return "openai"
+        return "anthropic"
