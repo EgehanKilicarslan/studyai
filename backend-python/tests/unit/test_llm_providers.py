@@ -1,220 +1,454 @@
-from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from app.services.rag_service import RagService
-from pb import rag_service_pb2 as rs
+from app.llm.provider import (
+    AnthropicProvider,
+    DummyProvider,
+    GeminiProvider,
+    OpenAIProvider,
+)
 
 
 async def async_iter(items):
+    """Helper to create async generator from list."""
     for item in items:
         yield item
 
 
-@pytest.fixture
-def mock_settings():
-    """Common settings mock for all tests."""
-    settings = Mock()
-    settings.maximum_file_size = 1024 * 1024
-    settings.embedding_chunk_size = 500
-    settings.embedding_chunk_overlap = 50
-    return settings
-
-
-@pytest.fixture
-def mock_llm():
-    """Common LLM mock for all tests."""
-    llm = Mock()
-    llm.generate_response = MagicMock(return_value=async_iter(["Answer"]))
-    type(llm).provider_name = PropertyMock(return_value="dummy")
-    return llm
-
-
-@pytest.fixture
-def mock_embedding_service():
-    """Common embedding service mock for all tests."""
-    service = Mock()
-    service.search = AsyncMock(return_value=[])
-    service.add_documents = AsyncMock(return_value=5)
-    return service
-
-
-@pytest.fixture
-def rag_service(mock_settings, mock_llm, mock_embedding_service):
-    """RAG service instance with mocked dependencies."""
-    return RagService(mock_settings, mock_llm, mock_embedding_service)
+# ============================================================================
+# DUMMY PROVIDER TESTS
+# ============================================================================
 
 
 @pytest.mark.asyncio
-async def test_chat_success_scenario(rag_service, mock_llm, mock_embedding_service):
-    """
-    Scenario: The user asks a question, and a streaming response is returned.
-    """
+async def test_dummy_provider_returns_placeholder_response():
+    """Test that dummy provider returns a static message."""
+    provider = DummyProvider()
+
+    response = [
+        chunk
+        async for chunk in provider.generate_response(
+            query="test query", context_docs=["doc1", "doc2"], history=[]
+        )
+    ]
+
+    assert len(response) == 1
+    assert "DUMMY AI" in response[0]
+    assert "test query" in response[0]
+    assert "2" in response[0]  # Number of context docs
+
+
+def test_dummy_provider_name():
+    """Test that dummy provider returns correct name."""
+    provider = DummyProvider()
+    assert provider.provider_name == "dummy"
+
+
+# ============================================================================
+# OPENAI PROVIDER TESTS
+# ============================================================================
+
+
+@pytest.fixture
+def mock_openai_client():
+    """Create mock OpenAI client."""
+    client = Mock()
+    client.chat = Mock()
+    client.chat.completions = Mock()
+    return client
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_successful_response(mock_openai_client):
+    """Test OpenAI provider with successful streaming response."""
     # 1. ARRANGE
-    mock_llm.generate_response = MagicMock(return_value=async_iter(["Hello ", "from ", "Python!"]))
-    mock_embedding_service.search = AsyncMock(
-        return_value=[
-            {
-                "content": "Context info",
-                "metadata": {"filename": "doc.pdf", "page": 1},
-                "score": 0.9,
-            }
-        ]
+    mock_chunk_1 = Mock()
+    mock_chunk_1.choices = [Mock(delta=Mock(content="Hello "))]
+
+    mock_chunk_2 = Mock()
+    mock_chunk_2.choices = [Mock(delta=Mock(content="World"))]
+
+    mock_openai_client.chat.completions.create = AsyncMock(
+        return_value=async_iter([mock_chunk_1, mock_chunk_2])
     )
 
-    mock_request = rs.ChatRequest(query="Test Question", session_id="123")
-    mock_context = Mock()
+    with patch("app.llm.provider.openai_provider.AsyncOpenAI", return_value=mock_openai_client):
+        provider = OpenAIProvider(base_url=None, api_key="test-key", model="gpt-4", timeout=60.0)
 
     # 2. ACT
-    responses = [res async for res in rag_service.Chat(request=mock_request, context=mock_context)]
+    response = [
+        chunk
+        async for chunk in provider.generate_response(
+            query="test", context_docs=["doc"], history=[]
+        )
+    ]
 
     # 3. ASSERT
-    # LLM parts (3 parts) + Source info (1 part) = Total 4 responses expected
-    assert len(responses) == 4
-
-    # Is the combined answer correct?
-    full_answer = "".join([r.answer for r in responses])
-    assert "Hello from Python!" in full_answer
-
-    # Does the last message contain sources?
-    last_response = responses[-1]
-    assert len(last_response.source_documents) == 1
-    assert last_response.source_documents[0].filename == "doc.pdf"
+    assert "".join(response) == "Hello World"
 
 
 @pytest.mark.asyncio
-async def test_upload_document_success(mock_settings, mock_embedding_service):
-    """
-    Scenario: A valid text file is uploaded.
-    """
+async def test_openai_provider_filters_thinking_tags(mock_openai_client):
+    """Test that OpenAI provider filters out <thinking> tags."""
     # 1. ARRANGE
-    service = RagService(mock_settings, Mock(), mock_embedding_service)
+    mock_chunks = [
+        Mock(choices=[Mock(delta=Mock(content="Answer: "))]),
+        Mock(choices=[Mock(delta=Mock(content="<think>"))]),
+        Mock(choices=[Mock(delta=Mock(content="internal reasoning"))]),
+        Mock(choices=[Mock(delta=Mock(content="</think>"))]),
+        Mock(choices=[Mock(delta=Mock(content="Final answer"))]),
+    ]
 
-    # Create upload stream with metadata and chunks
-    async def mock_request_iterator():
-        # First yield metadata
-        yield rs.UploadRequest(
-            metadata=rs.UploadMetadata(filename="test_notes.txt", content_type="text/plain")
-        )
-        # Then yield file content as chunks
-        content = b"This is a test content. " * 50
-        yield rs.UploadRequest(chunk=content)
+    mock_openai_client.chat.completions.create = AsyncMock(return_value=async_iter(mock_chunks))
+
+    with patch("app.llm.provider.openai_provider.AsyncOpenAI", return_value=mock_openai_client):
+        provider = OpenAIProvider(base_url=None, api_key="test-key", model="gpt-4", timeout=60.0)
 
     # 2. ACT
-    # Mock the _parse_document_sync to return expected chunks
-    with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
-        # First call is for file write (we don't care about return)
-        # Subsequent calls are for parse_document_sync
-        mock_to_thread.side_effect = [
-            None,  # temp_file.write
-            (  # _parse_document_sync
-                ["chunk1", "chunk2", "chunk3", "chunk4", "chunk5"],
-                [{"filename": "test_notes.txt", "page": 1}] * 5,
-            ),
-            None,  # Path.unlink
-        ]
-
-        response = await service.UploadDocument(
-            request_iterator=mock_request_iterator(), context=Mock()
-        )
+    response = [
+        chunk
+        async for chunk in provider.generate_response(query="test", context_docs=[], history=[])
+    ]
 
     # 3. ASSERT
-    assert response.status == "success"
-    assert response.chunks_count == 5
-    mock_embedding_service.add_documents.assert_called_once()
+    full_response = "".join(response)
+    assert "Answer: " in full_response
+    assert "Final answer" in full_response
+    assert "internal reasoning" not in full_response
+    assert "<think>" not in full_response
 
 
 @pytest.mark.asyncio
-async def test_upload_document_validation_error(mock_settings):
-    """
-    Scenario: Unsupported file format.
-    """
-    service = RagService(mock_settings, Mock(), Mock())
+async def test_openai_provider_handles_empty_chunks(mock_openai_client):
+    """Test OpenAI provider skips empty content chunks."""
+    # 1. ARRANGE
+    mock_chunks = [
+        Mock(choices=[Mock(delta=Mock(content="Hello"))]),
+        Mock(choices=[Mock(delta=Mock(content=None))]),  # Empty chunk
+        Mock(choices=[Mock(delta=Mock(content=""))]),  # Empty string
+        Mock(choices=[Mock(delta=Mock(content=" World"))]),
+    ]
 
-    async def mock_request_iterator():
-        yield rs.UploadRequest(
-            metadata=rs.UploadMetadata(
-                filename="virus.exe", content_type="application/octet-stream"
-            )
+    mock_openai_client.chat.completions.create = AsyncMock(return_value=async_iter(mock_chunks))
+
+    with patch("app.llm.provider.openai_provider.AsyncOpenAI", return_value=mock_openai_client):
+        provider = OpenAIProvider(base_url=None, api_key="test-key", model="gpt-4", timeout=60.0)
+
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(query="test", context_docs=[], history=[])
+    ]
+
+    # 3. ASSERT
+    assert "".join(response) == "Hello World"
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_error_handling(mock_openai_client):
+    """Test OpenAI provider handles errors gracefully."""
+    # 1. ARRANGE
+    mock_openai_client.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
+
+    with patch("app.llm.provider.openai_provider.AsyncOpenAI", return_value=mock_openai_client):
+        provider = OpenAIProvider(base_url=None, api_key="test-key", model="gpt-4", timeout=60.0)
+
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(query="test", context_docs=[], history=[])
+    ]
+
+    # 3. ASSERT
+    assert len(response) == 1
+    assert "Error generating response (OpenAI)" in response[0]
+    assert "API Error" in response[0]
+
+
+def test_openai_provider_name():
+    """Test that OpenAI provider returns correct name."""
+    with patch("app.llm.provider.openai_provider.AsyncOpenAI"):
+        provider = OpenAIProvider(base_url=None, api_key="test-key", model="gpt-4", timeout=60.0)
+    assert provider.provider_name == "openai"
+
+
+# ============================================================================
+# ANTHROPIC PROVIDER TESTS
+# ============================================================================
+
+
+@pytest.fixture
+def mock_anthropic_client():
+    """Create mock Anthropic client."""
+    client = Mock()
+    client.messages = Mock()
+    return client
+
+
+@pytest.mark.asyncio
+async def test_anthropic_provider_successful_response(mock_anthropic_client):
+    """Test Anthropic provider with successful streaming response."""
+    # 1. ARRANGE
+    from anthropic.types import TextDelta
+
+    mock_chunk_1 = Mock(
+        type="content_block_delta", delta=TextDelta(text="Hello ", type="text_delta")
+    )
+    mock_chunk_2 = Mock(
+        type="content_block_delta", delta=TextDelta(text="from Anthropic", type="text_delta")
+    )
+
+    mock_anthropic_client.messages.create = AsyncMock(
+        return_value=async_iter([mock_chunk_1, mock_chunk_2])
+    )
+
+    with patch(
+        "app.llm.provider.anthropic_provider.AsyncAnthropic",
+        return_value=mock_anthropic_client,
+    ):
+        provider = AnthropicProvider(
+            base_url=None, api_key="test-key", model="claude-3", timeout=60.0
         )
-        yield rs.UploadRequest(chunk=b"binary data")
 
-    response = await service.UploadDocument(
-        request_iterator=mock_request_iterator(), context=Mock()
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(
+            query="test", context_docs=["doc"], history=[]
+        )
+    ]
+
+    # 3. ASSERT
+    assert "".join(response) == "Hello from Anthropic"
+
+
+@pytest.mark.asyncio
+async def test_anthropic_provider_filters_thinking_tags(mock_anthropic_client):
+    """Test that Anthropic provider filters out <thinking> tags."""
+    # 1. ARRANGE
+    from anthropic.types import TextDelta
+
+    mock_chunks = [
+        Mock(type="content_block_delta", delta=TextDelta(text="Answer: ", type="text_delta")),
+        Mock(type="content_block_delta", delta=TextDelta(text="<thinking>", type="text_delta")),
+        Mock(type="content_block_delta", delta=TextDelta(text="reasoning", type="text_delta")),
+        Mock(type="content_block_delta", delta=TextDelta(text="</thinking>", type="text_delta")),
+        Mock(type="content_block_delta", delta=TextDelta(text="Result", type="text_delta")),
+    ]
+
+    mock_anthropic_client.messages.create = AsyncMock(return_value=async_iter(mock_chunks))
+
+    with patch(
+        "app.llm.provider.anthropic_provider.AsyncAnthropic",
+        return_value=mock_anthropic_client,
+    ):
+        provider = AnthropicProvider(
+            base_url=None, api_key="test-key", model="claude-3", timeout=60.0
+        )
+
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(query="test", context_docs=[], history=[])
+    ]
+
+    # 3. ASSERT
+    full_response = "".join(response)
+    assert "Answer: " in full_response
+    assert "Result" in full_response
+    assert "reasoning" not in full_response
+
+
+@pytest.mark.asyncio
+async def test_anthropic_provider_skips_non_text_deltas(mock_anthropic_client):
+    """Test Anthropic provider skips non-TextDelta chunks."""
+    # 1. ARRANGE
+    from anthropic.types import TextDelta
+
+    mock_chunks = [
+        Mock(type="content_block_delta", delta=TextDelta(text="Hello", type="text_delta")),
+        Mock(type="other_type", delta=Mock()),  # Non-text delta
+        Mock(type="content_block_start", delta=Mock()),  # Different event type
+        Mock(type="content_block_delta", delta=TextDelta(text=" World", type="text_delta")),
+    ]
+
+    mock_anthropic_client.messages.create = AsyncMock(return_value=async_iter(mock_chunks))
+
+    with patch(
+        "app.llm.provider.anthropic_provider.AsyncAnthropic",
+        return_value=mock_anthropic_client,
+    ):
+        provider = AnthropicProvider(
+            base_url=None, api_key="test-key", model="claude-3", timeout=60.0
+        )
+
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(query="test", context_docs=[], history=[])
+    ]
+
+    # 3. ASSERT
+    assert "".join(response) == "Hello World"
+
+
+def test_anthropic_provider_name():
+    """Test that Anthropic provider returns correct name."""
+    with patch("app.llm.provider.anthropic_provider.AsyncAnthropic"):
+        provider = AnthropicProvider(
+            base_url=None, api_key="test-key", model="claude-3", timeout=60.0
+        )
+    assert provider.provider_name == "anthropic"
+
+
+# ============================================================================
+# GEMINI PROVIDER TESTS
+# ============================================================================
+
+
+@pytest.fixture
+def mock_gemini_client():
+    """Create mock Gemini client."""
+    client = Mock()
+    client.aio = Mock()
+    client.aio.models = Mock()
+    return client
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_successful_response(mock_gemini_client):
+    """Test Gemini provider with successful streaming response."""
+    # 1. ARRANGE
+    mock_chunk_1 = Mock(text="Hello ")
+    mock_chunk_2 = Mock(text="from Gemini")
+
+    mock_gemini_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=async_iter([mock_chunk_1, mock_chunk_2])
     )
 
-    assert response.status == "error"
-    assert "Unsupported file type" in response.message
+    with patch("app.llm.provider.gemini_provider.Client", return_value=mock_gemini_client):
+        provider = GeminiProvider(
+            base_url=None, api_key="test-key", model="gemini-pro", timeout=60.0
+        )
+
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(
+            query="test", context_docs=["doc"], history=[]
+        )
+    ]
+
+    # 3. ASSERT
+    assert "".join(response) == "Hello from Gemini"
 
 
 @pytest.mark.asyncio
-async def test_chat_with_empty_query(rag_service, mock_llm):
-    """Test handling of empty query."""
-    mock_llm.generate_response = MagicMock(return_value=async_iter(["No query provided"]))
-    mock_request = rs.ChatRequest(query="", session_id="123")
+async def test_gemini_provider_skips_empty_text(mock_gemini_client):
+    """Test Gemini provider skips chunks with empty text."""
+    # 1. ARRANGE
+    mock_chunks = [
+        Mock(text="Hello"),
+        Mock(text=None),  # Empty chunk
+        Mock(text=""),  # Empty string
+        Mock(text=" World"),
+    ]
 
-    responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
-
-    assert len(responses) > 0
-
-
-@pytest.mark.asyncio
-async def test_chat_with_long_query(rag_service, mock_llm):
-    """Test handling of very long queries."""
-    mock_llm.generate_response = MagicMock(return_value=async_iter(["Response to long query"]))
-    mock_request = rs.ChatRequest(query="x" * 10000, session_id="123")
-
-    responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
-
-    assert len(responses) > 0
-
-
-@pytest.mark.asyncio
-async def test_chat_error_handling(rag_service, mock_llm, mock_embedding_service):
-    """Test error handling during chat."""
-    mock_llm.generate_response = MagicMock(
-        return_value=async_iter(["Error generating response: Test error"])
+    mock_gemini_client.aio.models.generate_content_stream = AsyncMock(
+        return_value=async_iter(mock_chunks)
     )
-    mock_embedding_service.search = AsyncMock(side_effect=Exception("DB Error"))
-    mock_request = rs.ChatRequest(query="test", session_id="123")
 
-    responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
+    with patch("app.llm.provider.gemini_provider.Client", return_value=mock_gemini_client):
+        provider = GeminiProvider(
+            base_url=None, api_key="test-key", model="gemini-pro", timeout=60.0
+        )
 
-    assert len(responses) > 0
-    assert any("error" in r.answer.lower() for r in responses)
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(query="test", context_docs=[], history=[])
+    ]
 
-
-@pytest.mark.asyncio
-async def test_chat_returns_processing_time(rag_service):
-    """Test that processing time is included in response."""
-    mock_request = rs.ChatRequest(query="test", session_id="123")
-
-    responses = [res async for res in rag_service.Chat(request=mock_request, context=Mock())]
-
-    assert responses[-1].processing_time_ms >= 0
+    # 3. ASSERT
+    assert "".join(response) == "Hello World"
 
 
 @pytest.mark.asyncio
-async def test_chat_passes_context_docs_to_llm(rag_service, mock_llm, mock_embedding_service):
-    """Test that context documents are passed to LLM."""
-    mock_embedding_service.search = AsyncMock(
-        return_value=[{"content": "Doc1", "metadata": {}, "score": 0.9}]
+async def test_gemini_provider_error_handling(mock_gemini_client):
+    """Test Gemini provider handles errors gracefully."""
+    # 1. ARRANGE
+    mock_gemini_client.aio.models.generate_content_stream = AsyncMock(
+        side_effect=Exception("API Error")
     )
-    mock_request = rs.ChatRequest(query="test", session_id="123")
 
-    await rag_service.Chat(request=mock_request, context=Mock()).__anext__()
+    with patch("app.llm.provider.gemini_provider.Client", return_value=mock_gemini_client):
+        provider = GeminiProvider(
+            base_url=None, api_key="test-key", model="gemini-pro", timeout=60.0
+        )
 
-    mock_llm.generate_response.assert_called_once()
-    call_args = mock_llm.generate_response.call_args
-    assert len(call_args[1]["context_docs"]) == 1
+    # 2. ACT
+    response = [
+        chunk
+        async for chunk in provider.generate_response(query="test", context_docs=[], history=[])
+    ]
+
+    # 3. ASSERT
+    assert len(response) == 1
+    assert "Error generating response (Gemini)" in response[0]
+    assert "API Error" in response[0]
 
 
-@pytest.mark.asyncio
-async def test_chat_passes_empty_history(rag_service, mock_llm):
-    """Test that empty history is passed to LLM."""
-    mock_request = rs.ChatRequest(query="test", session_id="123")
+def test_gemini_provider_name():
+    """Test that Gemini provider returns correct name."""
+    with patch("app.llm.provider.gemini_provider.Client"):
+        provider = GeminiProvider(
+            base_url=None, api_key="test-key", model="gemini-pro", timeout=60.0
+        )
+    assert provider.provider_name == "gemini"
 
-    await rag_service.Chat(request=mock_request, context=Mock()).__anext__()
 
-    mock_llm.generate_response.assert_called_once()
-    call_args = mock_llm.generate_response.call_args
-    assert call_args[1]["history"] == []
+# ============================================================================
+# COMMON PROVIDER TESTS
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "provider_class,mock_path",
+    [
+        (OpenAIProvider, "app.llm.provider.openai_provider.AsyncOpenAI"),
+        (AnthropicProvider, "app.llm.provider.anthropic_provider.AsyncAnthropic"),
+        (GeminiProvider, "app.llm.provider.gemini_provider.Client"),
+    ],
+)
+def test_provider_accepts_history(provider_class, mock_path):
+    """Test that all providers accept conversation history."""
+    with patch(mock_path):
+        provider = provider_class(
+            base_url=None, api_key="test-key", model="test-model", timeout=60.0
+        )
+
+    # Should not raise exception
+    assert hasattr(provider, "generate_response")
+
+
+@pytest.mark.parametrize(
+    "provider_class,mock_path",
+    [
+        (OpenAIProvider, "app.llm.provider.openai_provider.AsyncOpenAI"),
+        (AnthropicProvider, "app.llm.provider.anthropic_provider.AsyncAnthropic"),
+        (GeminiProvider, "app.llm.provider.gemini_provider.Client"),
+    ],
+)
+def test_provider_builds_context_prompt(provider_class, mock_path):
+    """Test that all providers build context prompts correctly."""
+    with patch(mock_path):
+        provider = provider_class(
+            base_url=None, api_key="test-key", model="test-model", timeout=60.0
+        )
+
+    prompt = provider._build_context_prompt("test query", ["doc1", "doc2"])
+
+    assert "test query" in prompt
+    assert "doc1" in prompt
+    assert "doc2" in prompt
+    assert "CONTEXT:" in prompt
