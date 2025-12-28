@@ -74,13 +74,44 @@ class RagService(rs_grpc.RagServiceServicer):
 
             # B) Text/MD Processing
             else:
+                CHUNK_SIZE = 1024 * 1024  # Read 1MB at a time
+                text_buffer = ""
+
                 with open(file_path, "r", encoding="utf-8") as f:
-                    text = f.read()
-                file_chunks = self.text_splitter.split_text(text)
-                for chunk in file_chunks:
-                    text_chunks.append(chunk)
-                    metadatas.append({"filename": filename, "page": 1})
-                print("[Worker Thread] Extracted chunks from text file.")
+                    while True:
+                        # Read file in chunks to avoid loading entire file into memory
+                        chunk = f.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+
+                        text_buffer += chunk
+
+                        # Process buffer when it's large enough or at end of file
+                        # Keep some overlap to avoid splitting words/sentences at chunk boundaries
+                        if len(text_buffer) >= CHUNK_SIZE * 2 or not chunk:
+                            # Split text into semantic chunks
+                            file_chunks = self.text_splitter.split_text(text_buffer)
+
+                            # Process all but the last chunk (keep last for overlap)
+                            chunks_to_process = (
+                                file_chunks[:-1] if len(file_chunks) > 1 else file_chunks
+                            )
+
+                            for text_chunk in chunks_to_process:
+                                text_chunks.append(text_chunk)
+                                metadatas.append({"filename": filename, "page": 1})
+
+                            # Keep the last chunk as buffer for next iteration (for overlap)
+                            text_buffer = file_chunks[-1] if len(file_chunks) > 1 else ""
+
+                # Process any remaining text in buffer
+                if text_buffer.strip():
+                    final_chunks = self.text_splitter.split_text(text_buffer)
+                    for text_chunk in final_chunks:
+                        text_chunks.append(text_chunk)
+                        metadatas.append({"filename": filename, "page": 1})
+
+                print(f"[Worker Thread] Extracted {len(text_chunks)} chunks from text file.")
 
             return text_chunks, metadatas
 
@@ -93,11 +124,11 @@ class RagService(rs_grpc.RagServiceServicer):
         request_iterator: AsyncGenerator[rs.UploadRequest, None],
         context: grpc.aio.ServicerContext,
     ) -> rs.UploadResponse:
-        filename = None  # Changed from "unknown" to None
+        filename = None
         current_size = 0
         temp_file = None
         temp_file_path = None
-        metadata_received = False  # Track if metadata was received
+        metadata_received = False
 
         print("[RagService] UploadDocument stream started...")
 
