@@ -90,7 +90,7 @@ func init() {
 func setupRouter(ragClient *rag.Client) *gin.Engine {
 	cfg := &config.Config{
 		ApiServicePort: "8080",
-		AIServiceAddr:  "localhost:50051",
+		AIServiceAddr:  "backend-python:50051",
 		MaxFileSize:    10 * 1024 * 1024,
 		UploadTimeout:  300,
 	}

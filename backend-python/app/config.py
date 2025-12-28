@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     llm_timeout: float = Field(default=60.0)
 
-    qdrant_host: str = Field(default="localhost")
+    qdrant_host: str = Field(default="vector-db")
     qdrant_port: int = Field(default=6333)
     qdrant_collection: str = Field(default="school_docs")
 
