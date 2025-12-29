@@ -1,4 +1,4 @@
-package api
+package handler
 
 import (
 	"context"
@@ -14,21 +14,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Handler handles HTTP requests and forwards them to the RAG service
-type Handler struct {
+// ApiHandler handles HTTP requests and forwards them to the RAG service
+type ApiHandler struct {
 	ragClient *rag.Client
 	cfg       *config.Config
 	logger    *slog.Logger
 }
 
-// NewHandler injects dependencies (Dependency Injection Go Style)
-func NewHandler(ragClient *rag.Client, cfg *config.Config, logger *slog.Logger) *Handler {
-	return &Handler{ragClient: ragClient, cfg: cfg, logger: logger}
+// NewApiHandler injects dependencies (Dependency Injection Go Style)
+func NewApiHandler(ragClient *rag.Client, cfg *config.Config, logger *slog.Logger) *ApiHandler {
+	return &ApiHandler{ragClient: ragClient, cfg: cfg, logger: logger}
 }
 
 // ChatHandler: POST /api/chat
-func (h *Handler) ChatHandler(c *gin.Context) {
-	h.logger.Info("📨 [Handler] Chat request received")
+func (h *ApiHandler) ChatHandler(c *gin.Context) {
+	// Extract authenticated user ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		h.logger.Error("❌ [Handler] User ID not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	h.logger.Info("📨 [Handler] Chat request received",
+		"user_id", userID,
+	)
 
 	var reqBody struct {
 		Query     string `json:"query"`
@@ -52,6 +62,7 @@ func (h *Handler) ChatHandler(c *gin.Context) {
 	h.logger.Info("🔍 [Handler] Processing chat query",
 		"query", reqBody.Query,
 		"session_id", reqBody.SessionID,
+		"user_id", userID,
 	)
 
 	// 1. gRPC Request
@@ -111,8 +122,18 @@ func (h *Handler) ChatHandler(c *gin.Context) {
 	})
 }
 
-func (h *Handler) UploadHandler(c *gin.Context) {
-	h.logger.Info("📤 [Handler] Upload request received")
+func (h *ApiHandler) UploadHandler(c *gin.Context) {
+	// Extract authenticated user ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		h.logger.Error("❌ [Handler] User ID not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	h.logger.Info("📤 [Handler] Upload request received",
+		"user_id", userID,
+	)
 
 	// 1. Parse File
 	header, err := c.FormFile("file")

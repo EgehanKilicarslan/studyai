@@ -9,24 +9,40 @@ import (
 )
 
 type Config struct {
-	AppEnv         string
-	LogLevel       slog.Level
-	ApiServicePort string
-	AIServiceAddr  string
-	MaxFileSize    int64
-	ChatTimeout    int64
-	UploadTimeout  int64
+	AppEnv                 string
+	LogLevel               slog.Level
+	ApiServicePort         string
+	AIServiceAddr          string
+	MaxFileSize            int64
+	ChatTimeout            int64
+	UploadTimeout          int64
+	PostgreSQLHost         string
+	PostgreSQLPort         int64
+	PostgreSQLUser         string
+	PostgreSQLPassword     string
+	PostgreSQLDatabase     string
+	JWTSecret              string
+	AccessTokenExpiration  int64
+	RefreshTokenExpiration int64
 }
 
 func LoadConfig() *Config {
 	return &Config{
-		AppEnv:         getEnv("APP_ENV", "development"), // Default development
-		LogLevel:       getLogLevel(),
-		ApiServicePort: getEnv("API_SERVICE_PORT", "8080"),           // Default port 8080
-		AIServiceAddr:  getAIServiceAddr(),                           // Default backend-python:50051
-		MaxFileSize:    getEnvAsInt64("MAX_FILE_SIZE", 10*1024*1024), // Default 10 MB
-		ChatTimeout:    getEnvAsInt64("CHAT_TIMEOUT", 120),           // Default 120 seconds
-		UploadTimeout:  getEnvAsInt64("UPLOAD_TIMEOUT", 300),         // Default 300 seconds
+		AppEnv:                 getEnv("APP_ENV", "development"),                  // Default development
+		LogLevel:               getLogLevel(),                                     // Default INFO
+		ApiServicePort:         getEnv("API_SERVICE_PORT", "8080"),                // Default 8080
+		AIServiceAddr:          getAIServiceAddr(),                                // Default backend-python:50051
+		MaxFileSize:            getEnvAsInt64("MAX_FILE_SIZE", 10*1024*1024),      // Default 10 MB
+		ChatTimeout:            getEnvAsInt64("CHAT_TIMEOUT", 120),                // Default 120 seconds
+		UploadTimeout:          getEnvAsInt64("UPLOAD_TIMEOUT", 300),              // Default 300 seconds
+		PostgreSQLHost:         getEnv("POSTGRESQL_HOST", "db"),                   // Default db
+		PostgreSQLPort:         getEnvAsInt64("POSTGRESQL_PORT", 5432),            // Default 5432
+		PostgreSQLUser:         getEnv("POSTGRESQL_USER", "studyai_user"),         // Default user
+		PostgreSQLPassword:     getEnv("POSTGRESQL_PASSWORD", "studyai_password"), // Default password
+		PostgreSQLDatabase:     getEnv("POSTGRESQL_DATABASE", "studyai_db"),       // Default database name
+		JWTSecret:              getEnv("JWT_SECRET", "studyai_secret"),            // Default secret key
+		AccessTokenExpiration:  getEnvAsInt64("ACCESS_TOKEN_EXPIRATION", 900),     // Default 15 minutes
+		RefreshTokenExpiration: getEnvAsInt64("REFRESH_TOKEN_EXPIRATION", 604800), // Default 7 days
 	}
 }
 
