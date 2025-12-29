@@ -113,7 +113,7 @@ deps: ## Updates/installs Go and Python dependencies
 	@printf "$(BLUE)📦 Downloading Go modules...$(RESET)\n"
 	@cd $(GO_DIR) && go mod tidy && go mod download
 	@printf "$(BLUE)📦 Installing Python libraries...$(RESET)\n"
-	@cd $(PY_DIR) && uv sync --dev
+	@cd $(PY_DIR) && uv sync --all-groups
 	@printf "$(GREEN)✅ Dependencies are ready.$(RESET)\n"
 
 .PHONY: clean
