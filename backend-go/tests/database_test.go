@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/models"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/repository"
 )
@@ -447,5 +448,40 @@ func TestRefreshTokenRepository_DeleteExpiredTokens(t *testing.T) {
 		found, err := tokenRepo.FindByToken("valid-to-keep")
 		assert.NoError(t, err)
 		assert.NotNil(t, found)
+	})
+}
+
+// ==================== DATABASE PACKAGE TESTS ====================
+
+func TestGetDatabase(t *testing.T) {
+	t.Run("returns nil when not initialized", func(t *testing.T) {
+		// Save original value
+		originalDB := database.DATABASE
+		database.DATABASE = nil
+
+		db := database.GetDatabase()
+		assert.Nil(t, db)
+
+		// Restore original value
+		database.DATABASE = originalDB
+	})
+
+	t.Run("returns database when initialized", func(t *testing.T) {
+		// Save original value
+		originalDB := database.DATABASE
+
+		// Create a mock database for testing
+		mockDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+		require.NoError(t, err)
+
+		database.DATABASE = mockDB
+		db := database.GetDatabase()
+		assert.NotNil(t, db)
+		assert.Equal(t, mockDB, db)
+
+		// Restore original value
+		database.DATABASE = originalDB
 	})
 }
