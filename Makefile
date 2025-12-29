@@ -74,7 +74,9 @@ test-py: ## Runs Python tests (pytest)
 test-go: ## Runs Go tests
 	@printf "$(BLUE)🐹 Running Go tests...$(RESET)\n"
 	@mkdir -p $(GO_DIR)/reports
-	@cd $(GO_DIR) && go test ./... -v -count=1 -coverpkg=./... -coverprofile=reports/coverage.txt -covermode=atomic
+	@cd $(GO_DIR) && go test ./... -v -count=1 -coverpkg=./... -coverprofile=reports/coverage.tmp -covermode=atomic
+	@cat $(GO_DIR)/reports/coverage.tmp | grep -v "/pb/" | grep -v "/cmd/" > $(GO_DIR)/reports/coverage.txt
+	@rm $(GO_DIR)/reports/coverage.tmp
 
 # -----------------------------------------------------------------------------
 # DOCKER OPERATIONS
