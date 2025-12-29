@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/api"
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/config"
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/logger"
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/rag"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/api"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/logger"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/rag"
 )
 
 func main() {

@@ -71,8 +71,8 @@ The **scope** indicates which part of the project is affected:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/EgehanKilicarslan/constructor-rag-assistant
-cd constructor-rag-assistant
+git clone https://github.com/EgehanKilicarslan/studyai
+cd studyai
 ```
 
 ### 2. Install Git Hooks

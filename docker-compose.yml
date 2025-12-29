@@ -4,7 +4,7 @@ services:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
-    container_name: rag-python-service
+    container_name: studyai-python-service
     ports:
       - "50051:50051"
     env_file:
@@ -14,14 +14,14 @@ services:
     depends_on:
       - vector-db
     networks:
-      - rag-network
+      - studyai-network
 
   # 🌐 ORCHESTRATOR
   backend-go:
     build:
       context: ./backend-go
       dockerfile: Dockerfile
-    container_name: rag-go-gateway
+    container_name: studyai-go-gateway
     ports:
       - "8080:8080"
     environment:
@@ -31,12 +31,12 @@ services:
     depends_on:
       - backend-python 
     networks:
-      - rag-network
+      - studyai-network
 
   # 📚 VECTOR DATABASE
   vector-db:
     image: qdrant/qdrant:latest
-    container_name: rag-vector-db
+    container_name: studyai-vector-db
     ports:
       - "6333:6333" # API port
       - "6334:6334" # gRPC port
@@ -45,7 +45,7 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     networks:
-      - rag-network
+      - studyai-network
     restart: unless-stopped
 
 volumes:
@@ -55,5 +55,5 @@ volumes:
     driver: local
 
 networks:
-  rag-network:
+  studyai-network:
     driver: bridge

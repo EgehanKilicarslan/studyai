@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/config"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
 )
 
 func New(cfg *config.Config) *slog.Logger {

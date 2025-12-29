@@ -21,7 +21,7 @@ GOBIN := $(shell go env GOPATH)/bin
 # -----------------------------------------------------------------------------
 .PHONY: help
 help: ## Shows this help message
-	@printf "$(BOLD)Constructor RAG Assistant - Management Console$(RESET)\n"
+	@printf "$(BOLD)StudyAI - Management Console$(RESET)\n"
 	@printf "Usage: make [command]\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
 

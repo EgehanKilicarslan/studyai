@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/api"
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/config"
-	"github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/internal/rag"
-	pb "github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/pb"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/api"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/rag"
+	pb "github.com/EgehanKilicarslan/studyai/backend-go/pb"
 )
 
 type MockRagServiceClient struct {

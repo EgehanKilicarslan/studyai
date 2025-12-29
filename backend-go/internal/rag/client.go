@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	pb "github.com/EgehanKilicarslan/constructor-rag-assistant/backend-go/pb"
+	pb "github.com/EgehanKilicarslan/studyai/backend-go/pb"
 )
 
 // Store RAG service client
