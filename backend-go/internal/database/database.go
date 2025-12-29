@@ -1,16 +1,20 @@
 package database
 
 import (
+	"embed"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
-	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/models"
 )
+
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
 
 var DATABASE *gorm.DB
 
@@ -67,13 +71,32 @@ func ConnectDatabase(cfg *config.Config, logger *slog.Logger) error {
 
 	logger.Info("✅ [Database] Database connection established")
 
-	// Run migrations
+	// Run migrations using goose
 	logger.Info("🔄 [Database] Running migrations...")
-	if err := db.AutoMigrate(&models.User{}, &models.RefreshToken{}); err != nil {
-		return fmt.Errorf("failed to migrate database: %w", err)
+	if err := runMigrations(db, logger); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	logger.Info("✅ [Database] Migrations completed successfully")
+
+	return nil
+}
+
+func runMigrations(gormDB *gorm.DB, logger *slog.Logger) error {
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	goose.SetBaseFS(embedMigrations)
+
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("failed to set goose dialect: %w", err)
+	}
+
+	if err := goose.Up(sqlDB, "migrations"); err != nil {
+		return fmt.Errorf("failed to run goose migrations: %w", err)
+	}
 
 	return nil
 }
