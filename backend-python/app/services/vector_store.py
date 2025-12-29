@@ -9,9 +9,53 @@ from .embedding_generator import EmbeddingGenerator
 
 
 class VectorStore:
+    """
+    A service class for managing a vector store using Qdrant, which supports operations
+    such as ensuring the collection exists, upserting vectors, and performing vector searches.
+
+    Attributes:
+        logger (logging.Logger): Logger instance for logging messages.
+        client (AsyncQdrantClient): Asynchronous Qdrant client for interacting with the vector database.
+        collection_name (str): Name of the Qdrant collection used for storing vectors.
+        vector_size (int): Dimensionality of the vectors stored in the collection.
+
+    Methods:
+        __init__(settings: Settings, logger: AppLogger, embedding_generator: EmbeddingGenerator):
+            Initializes the VectorStore instance and ensures the collection exists.
+
+        _ensure_collection(settings: Settings) -> None:
+            Ensures the Qdrant collection exists, creating it if necessary.
+
+        async upsert_vectors(vectors: List[List[float]], contents: List[str], metadatas: List[Dict]) -> int:
+            Upserts vectors into the collection along with their associated content and metadata.
+
+        async search(query_vector: List[float], limit: int = 25) -> List[models.ScoredPoint]:
+            Searches the collection for the most similar vectors to the given query vector.
+    """
+
     def __init__(
         self, settings: Settings, logger: AppLogger, embedding_generator: EmbeddingGenerator
     ) -> None:
+        """
+        Initializes the VectorStore service.
+
+        Args:
+            settings (Settings): The application settings containing configuration values such as
+                Qdrant host, port, and collection name.
+            logger (AppLogger): The application logger instance for logging messages.
+            embedding_generator (EmbeddingGenerator): The embedding generator instance used to determine
+                the vector size.
+
+        Attributes:
+            logger (logging.Logger): The logger instance for this class.
+            client (AsyncQdrantClient): The asynchronous Qdrant client for interacting with the Qdrant database.
+            collection_name (str): The name of the Qdrant collection to use.
+            vector_size (int): The size of the vectors used in the collection.
+
+        Raises:
+            Any exceptions raised during the initialization of the Qdrant client or collection setup.
+        """
+
         self.logger = logger.get_logger(__name__)
         self.client = AsyncQdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
         self.collection_name = settings.qdrant_collection_name
@@ -20,6 +64,24 @@ class VectorStore:
         self._ensure_collection(settings)
 
     def _ensure_collection(self, settings: Settings) -> None:
+        """
+        Ensures the existence of a Qdrant collection with the specified configuration.
+
+        This method checks if a collection with the given name exists in the Qdrant vector database.
+        If the collection does not exist, it creates one with the specified vector size and distance
+        metric (cosine similarity). The method also logs the creation of the collection.
+
+        Args:
+            settings (Settings): The configuration settings containing the Qdrant host and port.
+
+        Raises:
+            Any exceptions raised during the collection existence check or creation will propagate
+            to the caller.
+
+        Note:
+            The Qdrant client is closed after the operation, regardless of success or failure.
+        """
+
         sync_client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
 
         try:
@@ -38,6 +100,30 @@ class VectorStore:
     async def upsert_vectors(
         self, vectors: List[List[float]], contents: List[str], metadatas: List[Dict]
     ) -> int:
+        """
+        Upserts vectors into the vector store.
+
+        This method takes a list of vectors, their corresponding contents, and metadata,
+        and inserts or updates them in the vector store. Each vector is associated with
+        a unique identifier, its content, and metadata.
+
+        Args:
+            vectors (List[List[float]]): A list of vectors to be upserted.
+            contents (List[str]): A list of content strings corresponding to each vector.
+            metadatas (List[Dict]): A list of metadata dictionaries corresponding to each vector.
+
+        Returns:
+            int: The number of vectors successfully upserted.
+
+        Raises:
+            Any exceptions raised by the `self.client.upsert` method.
+
+        Notes:
+            - If the `vectors` list is empty, the method returns 0 without performing any operations.
+            - Each vector is assigned a unique identifier using `uuid.uuid4().hex`.
+            - The `payload` for each vector is a combination of its content and metadata.
+        """
+
         if not vectors:
             return 0
 
@@ -54,6 +140,17 @@ class VectorStore:
         return len(points)
 
     async def search(self, query_vector: List[float], limit: int = 25) -> List[models.ScoredPoint]:
+        """
+        Perform a vector similarity search on the collection.
+
+        Args:
+            query_vector (List[float]): The vector to query against the collection.
+            limit (int, optional): The maximum number of results to return. Defaults to 25.
+
+        Returns:
+            List[models.ScoredPoint]: A list of scored points representing the search results.
+        """
+
         res = await self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,

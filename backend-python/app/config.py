@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    """Application configuration settings."""
+
     app_env: str = Field(default="development", pattern="^(development|production)$")
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 

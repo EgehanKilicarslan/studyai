@@ -6,6 +6,8 @@ from services import DocumentParser, EmbeddingGenerator, RagService, RerankerSer
 
 
 class Container(containers.DeclarativeContainer):
+    """Dependency injection container for application components."""
+
     config = providers.Object(settings)
 
     app_logger = providers.Singleton(AppLogger, settings=config)
