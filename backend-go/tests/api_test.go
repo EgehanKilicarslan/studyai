@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -93,8 +94,11 @@ func setupRouter(ragClient *rag.Client) *gin.Engine {
 		AIServiceAddr:  "backend-python:50051",
 		MaxFileSize:    10 * 1024 * 1024,
 		UploadTimeout:  300,
+		ChatTimeout:    30,
 	}
-	handler := api.NewHandler(ragClient, cfg)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	handler := api.NewHandler(ragClient, cfg, logger)
 	return api.SetupRouter(handler)
 }
 
