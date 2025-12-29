@@ -11,6 +11,12 @@ async def serve():
 
     # 2. Resolve service
     settings = container.config()
+
+    app_logger = container.app_logger()
+    app_logger.setup()
+
+    logger = app_logger.get_logger(__name__)
+
     rag_service_instance = container.rag_service()
 
     # 3. Start gRPC Server in async mode
@@ -21,8 +27,8 @@ async def serve():
 
     server.add_insecure_port(f"[::]:{settings.ai_service_port}")
 
-    print("🚀 [Python] AI Service Started (DI Enabled)!")
-    print(f"   -> Active LLM: {rag_service_instance.llm.provider_name}")
+    logger.info("🚀 [Python] AI Service Started (DI Enabled)!")
+    logger.info(f"   -> Active LLM: {rag_service_instance.llm.provider_name}")
 
     await server.start()
 

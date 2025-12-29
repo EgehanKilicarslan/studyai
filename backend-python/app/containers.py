@@ -1,27 +1,31 @@
 from config import settings
 from dependency_injector import containers, providers
 from llm import get_llm_provider
+from logger import AppLogger
 from services import DocumentParser, EmbeddingGenerator, RagService, RerankerService, VectorStore
 
 
 class Container(containers.DeclarativeContainer):
     config = providers.Object(settings)
 
-    llm_client = providers.Factory(get_llm_provider, settings=config)
+    app_logger = providers.Singleton(AppLogger, settings=config)
 
-    document_parser = providers.Factory(DocumentParser, settings=config)
+    llm_client = providers.Factory(get_llm_provider, settings=config, logger=app_logger)
 
-    embedding_generator = providers.Factory(EmbeddingGenerator, settings=config)
+    document_parser = providers.Factory(DocumentParser, settings=config, logger=app_logger)
 
-    reranker_service = providers.Factory(RerankerService, settings=config)
+    embedding_generator = providers.Factory(EmbeddingGenerator, settings=config, logger=app_logger)
+
+    reranker_service = providers.Factory(RerankerService, settings=config, logger=app_logger)
 
     vector_store = providers.Factory(
-        VectorStore, settings=config, embedding_generator=embedding_generator
+        VectorStore, settings=config, logger=app_logger, embedding_generator=embedding_generator
     )
 
     rag_service = providers.Factory(
         RagService,
         settings=config,
+        logger=app_logger,
         llm_provider=llm_client,
         vector_store=vector_store,
         embedder=embedding_generator,

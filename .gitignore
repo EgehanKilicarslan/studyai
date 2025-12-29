@@ -31,7 +31,6 @@ backend-python/.uv
 *.prof
 backend-go/bin/
 backend-go/orchestrator
-# Vendor (Gerekirse açarsın)
 vendor/
 
 # --- Node / Frontend ---
@@ -45,8 +44,3 @@ frontend-react/.env.local
 # --- Docker & Logs ---
 *.log
 docker-compose.override.yml
-
-# --- Generated Code (Opsiyonel) ---
-# Biz bunları repo'da tutmak istiyoruz o yüzden yorum satırında bırakıyorum.
-# backend-go/pb/
-# backend-python/pb/

@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 import grpc
 from config import Settings
 from llm import LLMProvider
+from logger import AppLogger
 from pb import rag_service_pb2 as rs
 from pb import rag_service_pb2_grpc as rs_grpc
 
@@ -20,12 +21,14 @@ class RagService(rs_grpc.RagServiceServicer):
     def __init__(
         self,
         settings: Settings,
+        logger: AppLogger,
         llm_provider: LLMProvider,
         vector_store: VectorStore,
         embedder: EmbeddingGenerator,
         reranker: RerankerService,
         parser: DocumentParser,
     ):
+        self.logger = logger.get_logger(__name__)
         self.llm: LLMProvider = llm_provider
         self.vector_store: VectorStore = vector_store
         self.embedding_service: EmbeddingGenerator = embedder
@@ -44,7 +47,7 @@ class RagService(rs_grpc.RagServiceServicer):
         temp_file_path = None
         metadata_received = False
 
-        print("[RagService] UploadDocument stream started...")
+        self.logger.info("[RagService] UploadDocument stream started...")
 
         try:
             # 1) Create a temp file to store the uploaded content
@@ -93,12 +96,12 @@ class RagService(rs_grpc.RagServiceServicer):
 
             # 4) Parse the document
             try:
-                print(f"[RagService] Parsing document: {filename}...")
+                self.logger.info(f"[RagService] Parsing document: {filename}...")
                 text_chunks, metadatas = await asyncio.to_thread(
                     self.document_parser.parse_file, temp_file_path, filename
                 )
             except ValueError as ve:
-                print(f"⚠️ Validation Error: {ve}")
+                self.logger.warning(f"⚠️ Validation Error: {ve}")
                 return rs.UploadResponse(status="error", message=str(ve))
 
             if not text_chunks:
@@ -107,11 +110,11 @@ class RagService(rs_grpc.RagServiceServicer):
                 )
 
             # 5) Generate embeddings
-            print(f"[RagService] Generating embeddings for {len(text_chunks)} chunks...")
+            self.logger.info(f"[RagService] Generating embeddings for {len(text_chunks)} chunks...")
             vectors = await self.embedding_service.generate(text_chunks)
 
             # 6) Upsert vectors into the vector store
-            print("[RagService] Upserting vectors into vector store...")
+            self.logger.info("[RagService] Upserting vectors into vector store...")
             count = await self.vector_store.upsert_vectors(vectors, text_chunks, metadatas)
 
             return rs.UploadResponse(
@@ -121,7 +124,7 @@ class RagService(rs_grpc.RagServiceServicer):
             )
 
         except Exception as e:
-            print(f"❌ Upload Critical Error: {e}")
+            self.logger.error(f"❌ Upload Critical Error: {e}")
             return rs.UploadResponse(status="error", message=str(e))
 
         finally:
@@ -130,13 +133,13 @@ class RagService(rs_grpc.RagServiceServicer):
                 temp_file.close()
             if temp_file_path and Path(temp_file_path).exists():
                 await asyncio.to_thread(Path(temp_file_path).unlink)
-                print(f"[RagService] Cleaned up temp file: {temp_file_path}")
+                self.logger.info(f"[RagService] Cleaned up temp file: {temp_file_path}")
 
     async def Chat(
         self, request: rs.ChatRequest, context: grpc.aio.ServicerContext
     ) -> AsyncGenerator[rs.ChatResponse, None]:
         start_time = time.time()
-        print(f"[RagService] Question: {request.query} | Session: {request.session_id}")
+        self.logger.info(f"[RagService] Question: {request.query} | Session: {request.session_id}")
 
         try:
             # 1) Generate embedding for the query
@@ -146,7 +149,7 @@ class RagService(rs_grpc.RagServiceServicer):
             raw_hits = await self.vector_store.search(query_vec, limit=25)
 
             if not raw_hits:
-                print("[RagService] No documents found in initial search.")
+                self.logger.info("[RagService] No documents found in initial search.")
                 yield rs.ChatResponse(
                     answer="I couldn't find any relevant documents to answer your question."
                 )
@@ -162,12 +165,14 @@ class RagService(rs_grpc.RagServiceServicer):
                 for hit in raw_hits
             ]
 
-            print(f"[RagService] Reranking {len(passages)} documents...")
+            self.logger.info(f"[RagService] Reranking {len(passages)} documents...")
             ranked_results = self.reranker_service.rerank(request.query, passages, top_k=5)
 
             # 4) Prepare context documents
             context_docs = [res["text"] for res in ranked_results]
-            print(f"[RagService] Selected {len(context_docs)} high-quality docs after rerank.")
+            self.logger.info(
+                f"[RagService] Selected {len(context_docs)} high-quality docs after rerank."
+            )
 
             # 5) Generate answer using LLM
             llm_error = False
@@ -207,7 +212,7 @@ class RagService(rs_grpc.RagServiceServicer):
                 )
 
         except Exception as e:
-            print(f"❌ Chat Error: {e}")
+            self.logger.error(f"❌ Chat Error: {e}")
             yield rs.ChatResponse(
                 answer="Sorry, an internal error occurred while processing your request.",
                 processing_time_ms=0.0,

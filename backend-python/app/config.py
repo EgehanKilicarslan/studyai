@@ -5,6 +5,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    app_env: str = Field(default="development", pattern="^(development|production)$")
+    log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
+
     ai_service_port: int = Field(default=50051)
 
     llm_provider: str = Field(default="dummy", pattern="^(openai|gemini|anthropic|dummy)$")

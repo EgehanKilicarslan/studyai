@@ -5,10 +5,12 @@ from typing import Dict, List, Tuple
 import fitz
 from config import Settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from logger import AppLogger
 
 
 class DocumentParser:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, logger: AppLogger) -> None:
+        self.logger = logger.get_logger(__name__)
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.embedding_chunk_size,
             chunk_overlap=settings.embedding_chunk_overlap,
@@ -16,7 +18,7 @@ class DocumentParser:
         )
 
     def parse_file(self, file_path: str, filename: str) -> Tuple[List[str], List[Dict]]:
-        print(f"[Parser] Processing: {filename}")
+        self.logger.info(f"[Parser] Processing: {filename}")
 
         if not re.match(r"^[\w\-. ]+$", filename):
             raise ValueError(f"Invalid filename format: {filename}")
@@ -48,7 +50,7 @@ class DocumentParser:
 
             return text_chunks, metadatas
         except Exception as e:
-            print(f"❌ PDF Parsing Error: {e}")
+            self.logger.error(f"❌ PDF Parsing Error: {e}")
             raise
 
     def _parse_text(self, file_path: str, filename: str) -> Tuple[List[str], List[Dict]]:
@@ -95,5 +97,5 @@ class DocumentParser:
 
             return text_chunks, metadatas
         except Exception as e:
-            print(f"❌ Text Parsing Error: {e}")
+            self.logger.error(f"❌ Text Parsing Error: {e}")
             raise

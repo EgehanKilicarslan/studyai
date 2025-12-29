@@ -6,11 +6,14 @@ from llm.provider import (
     GeminiProvider,
     OpenAIProvider,
 )
+from logger import AppLogger
 
 
-def get_llm_provider(settings: Settings) -> LLMProvider:
+def get_llm_provider(settings: Settings, logger: AppLogger) -> LLMProvider:
+    _logger = logger.get_logger(__name__)
+
     provider = settings.llm_provider
-    print(f"🧠 [Factory] Selected LLM Provider: {provider}")
+    _logger.info(f"🧠 [Factory] Selected LLM Provider: {provider}")
 
     # Map provider names to their classes
     provider_map = {

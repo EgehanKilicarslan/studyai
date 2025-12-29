@@ -2,13 +2,17 @@ import uuid
 from typing import Dict, List
 
 from config import Settings
+from logger import AppLogger
 from qdrant_client import AsyncQdrantClient, QdrantClient, models
 
 from .embedding_generator import EmbeddingGenerator
 
 
 class VectorStore:
-    def __init__(self, settings: Settings, embedding_generator: EmbeddingGenerator) -> None:
+    def __init__(
+        self, settings: Settings, logger: AppLogger, embedding_generator: EmbeddingGenerator
+    ) -> None:
+        self.logger = logger.get_logger(__name__)
         self.client = AsyncQdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
         self.collection_name = settings.qdrant_collection_name
         self.vector_size = embedding_generator.vector_size
@@ -27,7 +31,7 @@ class VectorStore:
                         distance=models.Distance.COSINE,  # Use cosine similarity for semantic search
                     ),
                 )
-                print("✅ [VectorStore] Collection created (Startup check).")
+                self.logger.info("✅ [VectorStore] Collection created (Startup check).")
         finally:
             sync_client.close()
 
