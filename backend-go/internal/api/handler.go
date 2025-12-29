@@ -43,6 +43,12 @@ func (h *Handler) ChatHandler(c *gin.Context) {
 		return
 	}
 
+	if reqBody.Query == "" {
+		h.logger.Error("❌ [Handler] Missing query in chat request")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Query is required"})
+		return
+	}
+
 	h.logger.Info("🔍 [Handler] Processing chat query",
 		"query", reqBody.Query,
 		"session_id", reqBody.SessionID,
