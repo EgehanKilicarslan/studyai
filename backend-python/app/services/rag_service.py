@@ -1,20 +1,19 @@
 import asyncio
-import re
 import tempfile
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Dict, List, Tuple
+from typing import AsyncGenerator
 
-import fitz
 import grpc
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from config import Settings
+from llm import LLMProvider
 from pb import rag_service_pb2 as rs
 from pb import rag_service_pb2_grpc as rs_grpc
 
-from app.config import Settings
-from app.services import EmbeddingService
-
-from ..llm import LLMProvider
+from .document_parser import DocumentParser
+from .embedding_generator import EmbeddingGenerator
+from .reranker_service import RerankerService
+from .vector_store import VectorStore
 
 
 class RagService(rs_grpc.RagServiceServicer):
@@ -22,102 +21,17 @@ class RagService(rs_grpc.RagServiceServicer):
         self,
         settings: Settings,
         llm_provider: LLMProvider,
-        embedding_service: EmbeddingService,
+        vector_store: VectorStore,
+        embedder: EmbeddingGenerator,
+        reranker: RerankerService,
+        parser: DocumentParser,
     ):
         self.llm: LLMProvider = llm_provider
-        self.embedding_service: EmbeddingService = embedding_service
+        self.vector_store: VectorStore = vector_store
+        self.embedding_service: EmbeddingGenerator = embedder
+        self.reranker_service: RerankerService = reranker
+        self.document_parser: DocumentParser = parser
         self.max_file_size = settings.maximum_file_size
-        self.allowed_file_types = {".pdf", ".txt", ".md"}
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=settings.embedding_chunk_size,
-            chunk_overlap=settings.embedding_chunk_overlap,
-            separators=["\n\n", "\n", " ", ""],
-        )
-
-    def _validate_filename(self, filename: str) -> tuple[bool, str]:
-        file_ext = Path(filename).suffix.lower()
-        if file_ext not in self.allowed_file_types:
-            return (
-                False,
-                f"Unsupported file type: {file_ext}. Allowed types are: {', '.join(self.allowed_file_types)}",
-            )
-
-        if not re.match(r"^[\w\-. ]+$", filename):
-            return False, "Invalid filename characters"
-
-        return True, ""
-
-    def _parse_document_sync(self, file_path: str, filename: str) -> Tuple[List[str], List[Dict]]:
-        """
-        🛑 THIS METHOD CONTAINS CPU-INTENSIVE OPERATIONS (Runs synchronously).
-        This method should be called within 'asyncio.to_thread'.
-        """
-        print(f"[Worker Thread] Parsing file: {filename} from {file_path}")
-        text_chunks = []
-        metadatas = []
-
-        try:
-            # A) PDF Processing
-            if filename.lower().endswith(".pdf"):
-                with fitz.open(file_path) as doc:
-                    for i in range(len(doc)):
-                        page = doc[i]
-                        text = page.get_text()
-
-                        if isinstance(text, str) and text.strip():
-                            page_chunks = self.text_splitter.split_text(text)
-                            for chunk in page_chunks:
-                                text_chunks.append(chunk)
-                                metadatas.append({"filename": filename, "page": i + 1})
-
-                print(f"[Worker Thread] Extracted {len(text_chunks)} chunks from PDF.")
-
-            # B) Text/MD Processing
-            else:
-                CHUNK_SIZE = 1024 * 1024  # Read 1MB at a time
-                text_buffer = ""
-
-                with open(file_path, "r", encoding="utf-8") as f:
-                    while True:
-                        # Read file in chunks to avoid loading entire file into memory
-                        chunk = f.read(CHUNK_SIZE)
-                        if not chunk:
-                            break
-
-                        text_buffer += chunk
-
-                        # Process buffer when it's large enough or at end of file
-                        # Keep some overlap to avoid splitting words/sentences at chunk boundaries
-                        if len(text_buffer) >= CHUNK_SIZE * 2 or not chunk:
-                            # Split text into semantic chunks
-                            file_chunks = self.text_splitter.split_text(text_buffer)
-
-                            # Process all but the last chunk (keep last for overlap)
-                            chunks_to_process = (
-                                file_chunks[:-1] if len(file_chunks) > 1 else file_chunks
-                            )
-
-                            for text_chunk in chunks_to_process:
-                                text_chunks.append(text_chunk)
-                                metadatas.append({"filename": filename, "page": 1})
-
-                            # Keep the last chunk as buffer for next iteration (for overlap)
-                            text_buffer = file_chunks[-1] if len(file_chunks) > 1 else ""
-
-                # Process any remaining text in buffer
-                if text_buffer.strip():
-                    final_chunks = self.text_splitter.split_text(text_buffer)
-                    for text_chunk in final_chunks:
-                        text_chunks.append(text_chunk)
-                        metadatas.append({"filename": filename, "page": 1})
-
-                print(f"[Worker Thread] Extracted {len(text_chunks)} chunks from text file.")
-
-            return text_chunks, metadatas
-
-        except Exception as e:
-            print(f"❌ Parsing Error: {e}")
-            raise e
 
     async def UploadDocument(
         self,
@@ -133,31 +47,24 @@ class RagService(rs_grpc.RagServiceServicer):
         print("[RagService] UploadDocument stream started...")
 
         try:
-            # Create temporary file
+            # 1) Create a temp file to store the uploaded content
             temp_file = tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".tmp")
             temp_file_path = temp_file.name
 
-            # 1. Stream Loop (Non-blocking I/O) - Write to temp file
+            # 2) Process the incoming stream
             async for request in request_iterator:
-                # Is Metadata present?
+                # A) Metadata check
                 if request.HasField("metadata"):
                     if metadata_received:
                         return rs.UploadResponse(
                             status="error",
                             message="Metadata already received. Multiple metadata messages not allowed.",
                         )
-
                     filename = request.metadata.filename
                     metadata_received = True
 
-                    # Validation
-                    is_valid, err_msg = self._validate_filename(filename)
-                    if not is_valid:
-                        return rs.UploadResponse(status="error", message=err_msg)
-
-                # Is Chunk present?
+                # B) Chunk check
                 elif request.HasField("chunk"):
-                    # Enforce metadata-first rule
                     if not metadata_received:
                         return rs.UploadResponse(
                             status="error",
@@ -165,43 +72,47 @@ class RagService(rs_grpc.RagServiceServicer):
                         )
 
                     chunk_len = len(request.chunk)
-
                     if current_size + chunk_len > self.max_file_size:
-                        msg = f"Limit exceeded ({self.max_file_size} bytes)."
-                        return rs.UploadResponse(status="error", message=msg)
+                        return rs.UploadResponse(
+                            status="error",
+                            message=f"File size exceeds the maximum limit of {self.max_file_size} bytes.",
+                        )
 
-                    # Write chunk to temp file asynchronously
                     await asyncio.to_thread(temp_file.write, request.chunk)
                     current_size += chunk_len
 
-            # Close the temp file
+            # EOF reached, finalize the file
             temp_file.close()
 
-            # Ensure metadata was received
-            if not metadata_received or filename is None:
-                return rs.UploadResponse(
-                    status="error", message="Invalid upload: No metadata received."
-                )
+            # 3) Validate received data
+            if not metadata_received or not filename:
+                return rs.UploadResponse(status="error", message="No metadata received.")
 
             if current_size == 0:
                 return rs.UploadResponse(status="warning", message="Received empty file.")
 
-            # 3. Send CPU-Intensive Task to Thread (Parsing from temp file)
-            text_chunks, metadatas = await asyncio.to_thread(
-                self._parse_document_sync, temp_file_path, filename
-            )
+            # 4) Parse the document
+            try:
+                print(f"[RagService] Parsing document: {filename}...")
+                text_chunks, metadatas = await asyncio.to_thread(
+                    self.document_parser.parse_file, temp_file_path, filename
+                )
+            except ValueError as ve:
+                print(f"⚠️ Validation Error: {ve}")
+                return rs.UploadResponse(status="error", message=str(ve))
 
             if not text_chunks:
                 return rs.UploadResponse(
-                    status="warning",
-                    chunks_count=0,
-                    message="No text extracted from the document.",
+                    status="warning", message="No text extracted from document."
                 )
 
-            # 4. Send to Embedding Service (Async IO)
-            count = await self.embedding_service.add_documents(
-                documents=text_chunks, metadatas=metadatas
-            )
+            # 5) Generate embeddings
+            print(f"[RagService] Generating embeddings for {len(text_chunks)} chunks...")
+            vectors = await self.embedding_service.generate(text_chunks)
+
+            # 6) Upsert vectors into the vector store
+            print("[RagService] Upserting vectors into vector store...")
+            count = await self.vector_store.upsert_vectors(vectors, text_chunks, metadatas)
 
             return rs.UploadResponse(
                 status="success",
@@ -210,11 +121,11 @@ class RagService(rs_grpc.RagServiceServicer):
             )
 
         except Exception as e:
-            print(f"❌ Upload Error: {e}")
-            return rs.UploadResponse(status="error", chunks_count=0, message=str(e))
+            print(f"❌ Upload Critical Error: {e}")
+            return rs.UploadResponse(status="error", message=str(e))
 
         finally:
-            # Cleanup: Close and delete temp file
+            # Cleanup temp file
             if temp_file and not temp_file.closed:
                 temp_file.close()
             if temp_file_path and Path(temp_file_path).exists():
@@ -225,54 +136,79 @@ class RagService(rs_grpc.RagServiceServicer):
         self, request: rs.ChatRequest, context: grpc.aio.ServicerContext
     ) -> AsyncGenerator[rs.ChatResponse, None]:
         start_time = time.time()
-        print(f"[RagService] Question received: {request.query} | Session ID: {request.session_id}")
+        print(f"[RagService] Question: {request.query} | Session: {request.session_id}")
 
         try:
-            search_results = await self.embedding_service.search(request.query)
+            # 1) Generate embedding for the query
+            query_vec = (await self.embedding_service.generate([request.query]))[0]
 
-            context_docs = [hit["content"] for hit in search_results]
+            # 2) Search for relevant documents
+            raw_hits = await self.vector_store.search(query_vec, limit=25)
 
-            print(f"[RagService] Retrieved {len(context_docs)} context documents from vector DB.")
+            if not raw_hits:
+                print("[RagService] No documents found in initial search.")
+                yield rs.ChatResponse(
+                    answer="I couldn't find any relevant documents to answer your question."
+                )
+                return
 
+            # 3) Rerank the retrieved documents
+            passages = [
+                {
+                    "id": hit.id,
+                    "text": hit.payload.get("content", "") if hit.payload else "",
+                    "meta": hit.payload,
+                }
+                for hit in raw_hits
+            ]
+
+            print(f"[RagService] Reranking {len(passages)} documents...")
+            ranked_results = self.reranker_service.rerank(request.query, passages, top_k=5)
+
+            # 4) Prepare context documents
+            context_docs = [res["text"] for res in ranked_results]
+            print(f"[RagService] Selected {len(context_docs)} high-quality docs after rerank.")
+
+            # 5) Generate answer using LLM
             llm_error = False
             async for chunk in self.llm.generate_response(
-                query=request.query, context_docs=context_docs, history=[]
+                query=request.query,
+                context_docs=context_docs,
+                history=[],
             ):
-                # Check if chunk is an error message
-                if chunk.startswith("Error generating response"):
+                # Check for LLM errors in the stream
+                if chunk.startswith("Error"):
                     llm_error = True
 
+                # Stream the response chunk
                 yield rs.ChatResponse(
                     answer=chunk,
-                    source_documents=[],
                     processing_time_ms=0.0,
                 )
 
-            # Only send sources if LLM didn't error
+            # 6) Finalize response with sources if no LLM error
             if not llm_error:
                 processing_time = (time.time() - start_time) * 1000
 
                 source_documents = []
-                for hit in search_results:
-                    meta = hit["metadata"]
-
+                for res in ranked_results:
+                    meta = res["meta"]
                     doc = rs.Source(
-                        filename=meta.get("filename", "Unknown file"),
+                        filename=meta.get("filename", "unknown"),
                         page_number=int(meta.get("page", 1)),
-                        # Truncate snippet to first 100 characters for brevity
-                        snippet=hit["content"][:100].replace("\n", " ") + "...",
-                        score=hit["score"],
+                        snippet=res["text"][:100].replace("\n", " ") + "...",
+                        score=res["score"],  # Reranker score
                     )
                     source_documents.append(doc)
 
+                # Final response with sources and processing time
                 yield rs.ChatResponse(
                     answer="", source_documents=source_documents, processing_time_ms=processing_time
                 )
 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"❌ Chat Error: {e}")
             yield rs.ChatResponse(
-                answer="Sorry, an error occurred while generating the response.",
-                source_documents=[],
+                answer="Sorry, an internal error occurred while processing your request.",
                 processing_time_ms=0.0,
             )

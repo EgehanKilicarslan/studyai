@@ -1,9 +1,8 @@
 import asyncio
 
 import grpc
-from pb import rag_service_pb2_grpc  # noqa: E402
-
-from app.containers import Container  # noqa: E402
+from containers import Container
+from pb import rag_service_pb2_grpc
 
 
 async def serve():
@@ -20,7 +19,7 @@ async def serve():
     # Save service
     rag_service_pb2_grpc.add_RagServiceServicer_to_server(rag_service_instance, server)
 
-    server.add_insecure_port(f"[::]:{settings.python_port}")
+    server.add_insecure_port(f"[::]:{settings.ai_service_port}")
 
     print("🚀 [Python] AI Service Started (DI Enabled)!")
     print(f"   -> Active LLM: {rag_service_instance.llm.provider_name}")

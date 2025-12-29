@@ -2,8 +2,7 @@ from typing import AsyncGenerator, Dict, List
 
 from anthropic import AsyncAnthropic
 from anthropic.types import TextDelta
-
-from ..base import LLMProvider
+from llm.base import LLMProvider
 
 
 class AnthropicProvider(LLMProvider):

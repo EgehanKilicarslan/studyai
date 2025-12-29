@@ -5,23 +5,23 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    python_port: int = Field(default=50051)
+    ai_service_port: int = Field(default=50051)
 
     llm_provider: str = Field(default="dummy", pattern="^(openai|gemini|anthropic|dummy)$")
     llm_base_url: Optional[str] = Field(default=None)
     llm_api_key: Optional[str] = Field(default=None)
-
-    model_name: str = Field(default="local")
-
+    llm_model_name: str = Field(default="local")
     llm_timeout: float = Field(default=60.0)
 
     qdrant_host: str = Field(default="vector-db")
     qdrant_port: int = Field(default=6333)
-    qdrant_collection: str = Field(default="school_docs")
+    qdrant_collection_name: str = Field(default="school_docs")
 
-    embedding_vector_size: int = Field(default=384)
-    embedding_chunk_size: int = Field(default=500)
-    embedding_chunk_overlap: int = Field(default=50)
+    embedding_model_name: str = Field(default="BAAI/bge-small-en-v1.5")
+    embedding_chunk_size: int = Field(default=1000)
+    embedding_chunk_overlap: int = Field(default=200)
+
+    reranker_model_name: str = Field(default="ms-marco-MiniLM-L-12-v2")
 
     maximum_file_size: int = Field(default=50 * 1024 * 1024)  # 50 MB
 

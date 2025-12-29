@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Dict, List
 
-from ..base import LLMProvider
+from llm.base import LLMProvider
 
 
 class DummyProvider(LLMProvider):

@@ -2,8 +2,7 @@ from typing import AsyncGenerator, Dict, List
 
 from google.genai import Client
 from google.genai.types import GenerateContentConfig, HttpOptions, ThinkingConfig
-
-from ..base import LLMProvider
+from llm.base import LLMProvider
 
 
 class GeminiProvider(LLMProvider):

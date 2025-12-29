@@ -1,9 +1,8 @@
 from typing import AsyncGenerator, Dict, List, cast
 
+from llm.base import LLMProvider
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionStreamOptionsParam
-
-from ..base import LLMProvider
 
 
 class OpenAIProvider(LLMProvider):

@@ -1,7 +1,6 @@
-from app.config import Settings
-
-from .base import LLMProvider
-from .provider import (
+from config import Settings
+from llm.base import LLMProvider
+from llm.provider import (
     AnthropicProvider,
     DummyProvider,
     GeminiProvider,
@@ -26,7 +25,7 @@ def get_llm_provider(settings: Settings) -> LLMProvider:
         return provider_map[provider](
             base_url=settings.llm_base_url,
             api_key=settings.llm_api_key,
-            model=settings.model_name,
+            model=settings.llm_model_name,
             timeout=settings.llm_timeout,
         )
 
