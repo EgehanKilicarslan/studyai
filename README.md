@@ -2,7 +2,7 @@
 
 **An intelligent document management and RAG (Retrieval-Augmented Generation) system for educational content.**
 
-[![codecov](https://codecov.io/gh/EgehanKilicarslan/studyai/branch/main/graph/badge.svg)](https://codecov.io/gh/EgehanKilicarslan/studyai)
+[![codecov](https://codecov.io/gh/EgehanKilicarslan/studyai/branch/master/graph/badge.svg)](https://codecov.io/gh/EgehanKilicarslan/studyai)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python)](https://www.python.org/)
