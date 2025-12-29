@@ -8,3 +8,7 @@ backend-go/bin/
 *.md
 docker-compose.yml
 Makefile
+reports/
+*/reports/
+coverage.xml
+coverage.txt

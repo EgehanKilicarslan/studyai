@@ -67,12 +67,14 @@ test: test-py test-go ## Runs all tests (Python and Go)
 .PHONY: test-py
 test-py: ## Runs Python tests (pytest)
 	@printf "$(BLUE)🐍 Running Python tests (pytest)...$(RESET)\n"
-	@cd $(PY_DIR) && uv run pytest -v
+	@mkdir -p $(PY_DIR)/reports
+	@cd $(PY_DIR) && uv run pytest -v --cov=app --cov-report=xml:reports/coverage.xml
 
 .PHONY: test-go
 test-go: ## Runs Go tests
 	@printf "$(BLUE)🐹 Running Go tests...$(RESET)\n"
-	@cd $(GO_DIR) && go test ./tests/... -v -count=1
+	@mkdir -p $(GO_DIR)/reports
+	@cd $(GO_DIR) && go test ./... -v -count=1 -coverprofile=reports/coverage.txt -covermode=atomic
 
 # -----------------------------------------------------------------------------
 # DOCKER OPERATIONS
@@ -111,7 +113,7 @@ deps: ## Updates/installs Go and Python dependencies
 	@printf "$(BLUE)📦 Downloading Go modules...$(RESET)\n"
 	@cd $(GO_DIR) && go mod tidy && go mod download
 	@printf "$(BLUE)📦 Installing Python libraries...$(RESET)\n"
-	@cd $(PY_DIR) && pip install -r requirements.txt
+	@cd $(PY_DIR) && uv sync --dev
 	@printf "$(GREEN)✅ Dependencies are ready.$(RESET)\n"
 
 .PHONY: clean
@@ -119,4 +121,6 @@ clean: ## Cleans generated proto files and temporary files
 	@printf "$(YELLOW)🧹 Cleaning up...$(RESET)\n"
 	@rm -rf $(GO_DIR)/pb/*
 	@rm -rf $(PY_DIR)/pb/*
+	@rm -rf $(GO_DIR)/reports
+	@rm -rf $(PY_DIR)/reports
 	@printf "$(GREEN)✅ Squeaky clean.$(RESET)\n"

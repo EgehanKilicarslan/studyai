@@ -44,3 +44,8 @@ frontend-react/.env.local
 # --- Docker & Logs ---
 *.log
 docker-compose.override.yml
+
+
+# --- Test & Coverage Reports ---
+reports/
+*/reports/
