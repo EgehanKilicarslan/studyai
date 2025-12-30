@@ -66,7 +66,28 @@ The **scope** indicates which part of the project is affected:
 
 ---
 
-## 🚀 Setup Instructions
+## � Contributor License Agreement (CLA)
+
+Before your contribution can be accepted, you must agree to our [Contributor License Agreement (CLA)](CLA.md).
+
+### Why a CLA?
+
+- **Protects you**: Ensures you retain rights to your contributions
+- **Protects the project**: Clarifies licensing and intellectual property
+- **Enables future flexibility**: Allows the project to evolve while staying open source
+
+### What the CLA Covers
+
+1. **Copyright License**: You grant permission to use your contributions
+2. **Patent License**: Protection against patent claims
+3. **Original Work**: You confirm the contribution is your own (or properly attributed)
+4. **No Warranty**: Contributions are provided "as is"
+
+**By submitting a pull request, you acknowledge that you have read and agree to the terms of the CLA.**
+
+---
+
+## �🚀 Setup Instructions
 
 ### 1. Clone the Repository
 
@@ -165,6 +186,18 @@ The `.githooks/commit-msg` script automatically:
 
 ## ❓ Questions?
 
-If you have questions about commit conventions or need clarification, please open an issue or contact the maintainers.
+If you have questions about commit conventions, the CLA, or need clarification, please open an issue or contact the maintainers.
+
+---
+
+## 📋 Contribution Checklist
+
+Before submitting a PR, ensure:
+
+- [ ] You have read and agree to the [CLA](CLA.md)
+- [ ] Your commit messages follow the convention
+- [ ] Tests pass locally (`make test`)
+- [ ] Code follows project style guidelines
+- [ ] Documentation is updated if needed
 
 **Happy coding!** 🎉

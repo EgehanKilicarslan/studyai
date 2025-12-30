@@ -14,7 +14,7 @@
 
 StudyAI is a microservices-based platform that combines document processing, vector search, and large language models to create an intelligent question-answering system. Upload educational materials, ask questions, and receive contextually relevant answers backed by source citations.
 
-**⚠️ Note:** This project is currently under active development (~25% complete). Features and APIs may change significantly.
+**⚠️ Note:** This project is currently under active development (~40% complete). Features and APIs may change significantly.
 
 ---
 
@@ -121,7 +121,11 @@ Key environment variables (see `.env.example`):
 
 ## 🤝 Contributing
 
-We follow strict commit message conventions. Please read CONTRIBUTING.md before submitting any changes.
+We follow strict commit message conventions. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting any changes.
+
+### Contributor License Agreement
+
+By contributing to this project, you agree to the terms of our [Contributor License Agreement (CLA)](CLA.md). This ensures that contributions are properly licensed and protects both contributors and the project.
 
 **Quick Example:**
 
@@ -134,14 +138,33 @@ git commit -m "fix(go): prevent nil pointer in auth handler"
 
 ## 🧪 Current Status
 
+### ✅ Completed
+
 - [x] Basic RAG pipeline
 - [x] Document parsing (PDF, TXT, MD)
 - [x] Vector storage integration
-- [x] gRPC service definitions
+- [x] gRPC service definitions & implementation
+- [x] LLM provider integrations (OpenAI, Anthropic, Gemini)
+- [x] Embedding generation service
+- [x] Reranking service
+- [x] Database models & migrations
+- [x] User authentication (JWT-based)
+- [x] Refresh token management
+- [x] Docker containerization
+- [x] Unit test coverage
+
+### 🚧 In Progress
+
 - [ ] Frontend interface (React)
-- [ ] User authentication
-- [ ] Advanced analytics
+- [ ] Knowledge base management UI
+- [ ] Chat interface
+
+### 📋 Planned
+
+- [ ] Advanced analytics & usage metrics
 - [ ] Production optimizations
+- [ ] Role-based access control
+- [ ] Multi-tenant support
 
 ---
 
