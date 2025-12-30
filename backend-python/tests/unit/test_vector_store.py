@@ -66,8 +66,8 @@ async def test_initialization_skips_collection_creation_if_exists(
 
 
 @pytest.mark.asyncio
-async def test_upsert_vectors(mock_settings, mock_logger, mock_embedding_generator):
-    """Test that vectors are correctly upserted with content and metadata."""
+async def test_upsert_vectors_with_chunk_ids(mock_settings, mock_logger, mock_embedding_generator):
+    """Test that vectors are correctly upserted with chunk IDs and metadata."""
     with (
         patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
         patch("app.services.vector_store.QdrantClient"),
@@ -78,22 +78,26 @@ async def test_upsert_vectors(mock_settings, mock_logger, mock_embedding_generat
         store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
 
         vectors = [[0.1, 0.2]]
-        contents = ["test content"]
-        metadatas = [{"filename": "test.txt"}]
+        chunk_ids = ["chunk-1"]
+        document_id = "doc-123"
+        filename = "test.txt"
 
-        count = await store.upsert_vectors(vectors, contents, metadatas)
+        count = await store.upsert_vectors_with_chunk_ids(vectors, chunk_ids, document_id, filename)
 
         assert count == 1
         async_client_instance.upsert.assert_called_once()
 
         call_args = async_client_instance.upsert.call_args
         points = call_args[1]["points"]
-        assert points[0].payload["content"] == "test content"
+        assert points[0].payload["chunk_id"] == "chunk-1"
+        assert points[0].payload["document_id"] == "doc-123"
         assert points[0].payload["filename"] == "test.txt"
 
 
 @pytest.mark.asyncio
-async def test_upsert_multiple_vectors(mock_settings, mock_logger, mock_embedding_generator):
+async def test_upsert_multiple_vectors_with_chunk_ids(
+    mock_settings, mock_logger, mock_embedding_generator
+):
     """Test that multiple vectors can be upserted in a single operation."""
     with (
         patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
@@ -105,14 +109,11 @@ async def test_upsert_multiple_vectors(mock_settings, mock_logger, mock_embeddin
         store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
 
         vectors = [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
-        contents = ["content1", "content2", "content3"]
-        metadatas = [
-            {"filename": "file1.txt"},
-            {"filename": "file2.txt"},
-            {"filename": "file3.txt"},
-        ]
+        chunk_ids = ["chunk-1", "chunk-2", "chunk-3"]
+        document_id = "doc-123"
+        filename = "test.txt"
 
-        count = await store.upsert_vectors(vectors, contents, metadatas)
+        count = await store.upsert_vectors_with_chunk_ids(vectors, chunk_ids, document_id, filename)
 
         assert count == 3
         async_client_instance.upsert.assert_called_once()
@@ -130,7 +131,7 @@ async def test_upsert_vectors_empty_list(mock_settings, mock_logger, mock_embedd
 
         store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
 
-        count = await store.upsert_vectors([], [], [])
+        count = await store.upsert_vectors_with_chunk_ids([], [], "doc-123", "test.txt")
 
         assert count == 0
         async_client_instance.upsert.assert_not_called()
@@ -199,30 +200,20 @@ async def test_search_vectors_no_results(mock_settings, mock_logger, mock_embedd
 
 
 @pytest.mark.asyncio
-async def test_upsert_handles_metadata_variations(
-    mock_settings, mock_logger, mock_embedding_generator
-):
-    """Test that upsert correctly handles different metadata structures."""
+async def test_delete_by_document_id(mock_settings, mock_logger, mock_embedding_generator):
+    """Test that vectors can be deleted by document ID."""
     with (
         patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
         patch("app.services.vector_store.QdrantClient"),
     ):
         async_client_instance = MockAsyncClient.return_value
-        async_client_instance.upsert = AsyncMock()
+        async_client_instance.delete = AsyncMock()
 
         store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
 
-        vectors = [[0.1, 0.2], [0.3, 0.4]]
-        contents = ["content1", "content2"]
-        metadatas = [
-            {"filename": "file1.txt", "type": "document"},
-            {"filename": "file2.txt", "type": "code", "language": "python"},
-        ]
+        await store.delete_by_document_id("doc-123")
 
-        count = await store.upsert_vectors(vectors, contents, metadatas)
-
-        assert count == 2
-        call_args = async_client_instance.upsert.call_args
-        points = call_args[1]["points"]
-        assert points[0].payload["type"] == "document"
-        assert points[1].payload["language"] == "python"
+        async_client_instance.delete.assert_called_once()
+        call_args = async_client_instance.delete.call_args
+        # Collection name comes from mock_settings.qdrant_collection_name
+        assert call_args[1]["collection_name"] == mock_settings.qdrant_collection_name

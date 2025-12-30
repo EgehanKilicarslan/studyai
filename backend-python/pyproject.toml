@@ -5,7 +5,9 @@ description = "Backend service for RAG Assistant"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic>=1.17.2",
     "anthropic>=0.75.0",
+    "asyncpg>=0.31.0",
     "dependency-injector>=4.48.3",
     "fastembed>=0.7.4",
     "flashrank>=0.2.10",
@@ -20,6 +22,7 @@ dependencies = [
     "pymupdf>=1.26.7",
     "python-json-logger>=4.0.0",
     "qdrant-client>=1.16.2",
+    "sqlalchemy>=2.0.45",
     "types-protobuf>=6.32.1.20251210",
 ]
 

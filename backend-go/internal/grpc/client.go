@@ -1,4 +1,4 @@
-package rag
+package grpc
 
 import (
 	"crypto/tls"
@@ -12,13 +12,14 @@ import (
 	pb "github.com/EgehanKilicarslan/studyai/backend-go/pb"
 )
 
-// Store RAG service client
+// Store for gRPC client and connection
 type Client struct {
-	Service pb.RagServiceClient
-	conn    *grpc.ClientConn
+	ChatService          pb.ChatServiceClient
+	KnowledgeBaseService pb.KnowledgeBaseServiceClient
+	conn                 *grpc.ClientConn
 }
 
-// Creates a new RAG service client
+// Creates a new gRPC client
 func NewClient(addr string, useTLS bool) (*Client, error) {
 	var opts []grpc.DialOption
 	if useTLS {
@@ -48,10 +49,12 @@ func NewClient(addr string, useTLS bool) (*Client, error) {
 		return nil, err
 	}
 
-	client := pb.NewRagServiceClient(conn)
+	chatClient := pb.NewChatServiceClient(conn)
+	knowledgeBaseClient := pb.NewKnowledgeBaseServiceClient(conn)
 	return &Client{
-		Service: client,
-		conn:    conn,
+		ChatService:          chatClient,
+		KnowledgeBaseService: knowledgeBaseClient,
+		conn:                 conn,
 	}, nil
 }
 

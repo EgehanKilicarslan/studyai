@@ -29,7 +29,8 @@ def test_container_has_services():
     assert hasattr(container, "embedding_generator")
     assert hasattr(container, "reranker_service")
     assert hasattr(container, "vector_store")
-    assert hasattr(container, "rag_service")
+    assert hasattr(container, "chat_service")
+    assert hasattr(container, "knowledge_base_service")
 
 
 def test_container_logger_initialization():
@@ -58,12 +59,23 @@ def test_container_vector_store_provider():
     assert isinstance(container.vector_store, providers.Factory)
 
 
-def test_container_rag_service_provider():
-    """Test RAG service provider is defined and is a Factory."""
+def test_container_chat_service_provider():
+    """Test chat service provider is defined and is a Factory."""
     from dependency_injector import providers
 
     container = Container()
 
     # Verify the provider exists and is the correct type
-    assert hasattr(container, "rag_service")
-    assert isinstance(container.rag_service, providers.Factory)
+    assert hasattr(container, "chat_service")
+    assert isinstance(container.chat_service, providers.Factory)
+
+
+def test_container_knowledge_base_service_provider():
+    """Test knowledge base service provider is defined and is a Factory."""
+    from dependency_injector import providers
+
+    container = Container()
+
+    # Verify the provider exists and is the correct type
+    assert hasattr(container, "knowledge_base_service")
+    assert isinstance(container.knowledge_base_service, providers.Factory)

@@ -6,32 +6,39 @@ package rag;
 option go_package = "./pb";
 
 // --------------------------------------------------------
-// RAG Service Definition
+// Chat Service Definition
 // --------------------------------------------------------
-service RagService {
+service ChatService {
   /// Chat is an RPC that processes a user's query and returns a response.
   /// It takes a ChatRequest containing the query, session ID, and configuration,
   /// and returns a ChatResponse with the generated answer and source documents.
   rpc Chat (ChatRequest) returns (stream ChatResponse);
+}
 
-  /// UploadDocument is an RPC that handles document uploads.
-  /// It takes an UploadRequest with file details and content,
-  /// and returns an UploadResponse indicating the status of the upload.
+// --------------------------------------------------------
+// Knowledge Base Service Definition
+// --------------------------------------------------------
+service KnowledgeBaseService {
+  /// UploadDocument is an RPC that uploads a document in chunks.
+  /// It takes a stream of UploadRequest messages and returns an UploadResponse.
   rpc UploadDocument (stream UploadRequest) returns (UploadResponse);
+
+  /// DeleteDocument is an RPC that deletes a specified document.
+  /// It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
+  rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
+  
+  /// ListDocuments is an RPC that lists all documents in the knowledge base.
+  /// It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
+  rpc ListDocuments (ListDocumentsRequest) returns (ListDocumentsResponse);
 }
 
 // --------------------------------------------------------
 // Request Message Definitions
 // --------------------------------------------------------
 message ChatRequest {
-  string      query      = 1; // User's question
-  string      session_id = 2; // Unique session identifier
-  QueryConfig config     = 3; // Retrieval configuration
-}
+  string query      = 1; // User's question
+  string session_id = 2; // Unique session identifier
 
-message QueryConfig {
-  string collection_name = 1; // Name of the document collection
-  int32  max_results     = 2; // Maximum number of source documents to retrieve
 }
 
 // --------------------------------------------------------
@@ -44,10 +51,11 @@ message ChatResponse {
 }
 
 message Source {
-  string filename    = 1; // Name of the source document
-  int32  page_number = 2; // Page number in the document
-  string snippet     = 3; // Relevant text snippet
-  float  score       = 4; // Relevance score
+  string document_id = 1; // Unique identifier for the source document
+  string filename    = 2; // Name of the source document
+  int32  page_number = 3; // Page number in the document
+  string snippet     = 4; // Relevant text snippet
+  float  score       = 5; // Relevance score
 }
 
 // --------------------------------------------------------
@@ -66,7 +74,34 @@ message UploadMetadata {
 }
 
 message UploadResponse {
-  string status       = 1; // Status message
-  int32  chunks_count = 2; // Number of chunks created from the file
-  string message      = 3; // Additional information or error message
+  string document_id  = 1; // Unique identifier for the uploaded document
+  string status       = 2; // Status message
+  int32  chunks_count = 3; // Number of chunks created from the file
+  string message      = 4; // Additional information or error message
+}
+
+message DeleteDocumentRequest {
+  string document_id = 1; // Unique identifier for the document to be deleted
+}
+
+message DeleteDocumentResponse {
+  string status  = 1; // Status message
+  string message = 2; // Additional information or error message
+}
+
+message ListDocumentsRequest {
+  int32 page_size = 1; // Number of documents to return per page
+  string page_token = 2; // Token for pagination
+}
+
+message ListDocumentsResponse {
+  repeated DocumentInfo documents = 1; // List of document information
+  string next_page_token = 2; // Token for the next page
+}
+
+message DocumentInfo {
+  string document_id = 1; // Unique identifier for the document
+  string filename    = 2; // Name of the document
+  int64 upload_timestamp = 3; // Upload timestamp
+  int32 chunks_count = 4; // Number of chunks in the document
 }

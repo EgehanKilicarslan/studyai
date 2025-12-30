@@ -1,5 +1,4 @@
-import uuid
-from typing import Dict, List
+from typing import List
 
 from config import Settings
 from logger import AppLogger
@@ -97,47 +96,73 @@ class VectorStore:
         finally:
             sync_client.close()
 
-    async def upsert_vectors(
-        self, vectors: List[List[float]], contents: List[str], metadatas: List[Dict]
+    async def upsert_vectors_with_chunk_ids(
+        self,
+        vectors: List[List[float]],
+        chunk_ids: List[str],
+        document_id: str,
+        filename: str,
     ) -> int:
         """
-        Upserts vectors into the vector store.
+        Upserts vectors into the vector store with references to database chunk IDs.
 
-        This method takes a list of vectors, their corresponding contents, and metadata,
-        and inserts or updates them in the vector store. Each vector is associated with
-        a unique identifier, its content, and metadata.
+        The actual content is stored in PostgreSQL, Qdrant only stores:
+        - The vector embedding
+        - chunk_id: Reference to the DocumentChunk in PostgreSQL
+        - document_id: Reference to the Document in PostgreSQL
+        - filename: For display purposes
 
         Args:
             vectors (List[List[float]]): A list of vectors to be upserted.
-            contents (List[str]): A list of content strings corresponding to each vector.
-            metadatas (List[Dict]): A list of metadata dictionaries corresponding to each vector.
+            chunk_ids (List[str]): A list of chunk IDs from the database.
+            document_id (str): The document ID these chunks belong to.
+            filename (str): The filename for display purposes.
 
         Returns:
             int: The number of vectors successfully upserted.
-
-        Raises:
-            Any exceptions raised by the `self.client.upsert` method.
-
-        Notes:
-            - If the `vectors` list is empty, the method returns 0 without performing any operations.
-            - Each vector is assigned a unique identifier using `uuid.uuid4().hex`.
-            - The `payload` for each vector is a combination of its content and metadata.
         """
-
         if not vectors:
             return 0
 
         points = [
             models.PointStruct(
-                id=uuid.uuid4().hex,
+                id=chunk_id,  # Use chunk_id as the point ID for easy lookup
                 vector=vec,
-                payload={"content": content, **meta},
+                payload={
+                    "chunk_id": chunk_id,
+                    "document_id": document_id,
+                    "filename": filename,
+                },
             )
-            for vec, content, meta in zip(vectors, contents, metadatas)
+            for vec, chunk_id in zip(vectors, chunk_ids)
         ]
 
         await self.client.upsert(collection_name=self.collection_name, points=points)
+        self.logger.info(f"[VectorStore] Upserted {len(points)} vectors for document {document_id}")
         return len(points)
+
+    async def delete_by_document_id(self, document_id: str) -> None:
+        """
+        Deletes all vectors associated with a specific document ID.
+
+        Args:
+            document_id (str): The unique identifier of the document whose vectors should be deleted.
+        """
+        # Delete points where the payload contains the document_id
+        await self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="document_id",
+                            match=models.MatchValue(value=document_id),
+                        )
+                    ]
+                )
+            ),
+        )
+        self.logger.info(f"[VectorStore] Deleted vectors for document {document_id}")
 
     async def search(self, query_vector: List[float], limit: int = 25) -> List[models.ScoredPoint]:
         """

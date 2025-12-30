@@ -8,7 +8,8 @@ import (
 )
 
 func SetupRouter(
-	apiHandler *handler.ApiHandler,
+	chatHandler *handler.ChatHandler,
+	knowledgeBaseHandler *handler.KnowledgeBaseHandler,
 	authHandler *handler.AuthHandler,
 	authMiddleware *middleware.AuthMiddleware,
 ) *gin.Engine {
@@ -33,8 +34,10 @@ func SetupRouter(
 	api := r.Group("/api")
 	api.Use(authMiddleware.RequireAuth())
 	{
-		api.POST("/chat", apiHandler.ChatHandler)
-		api.POST("/upload", apiHandler.UploadHandler)
+		api.POST("/chat", chatHandler.ChatHandler)
+		api.POST("/upload", knowledgeBaseHandler.UploadHandler)
+		api.GET("/knowledge-base", knowledgeBaseHandler.ListHandler)
+		api.DELETE("/knowledge-base/:document_id", knowledgeBaseHandler.DeleteHandler)
 	}
 
 	return r

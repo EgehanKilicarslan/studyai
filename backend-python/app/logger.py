@@ -1,9 +1,8 @@
 import logging
 import sys
 
+from config import Settings
 from pythonjsonlogger.json import JsonFormatter
-
-from app.config import Settings
 
 
 class AppLogger:

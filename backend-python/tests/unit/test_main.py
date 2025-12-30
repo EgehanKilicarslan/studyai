@@ -39,14 +39,15 @@ def test_service_imports():
         from app.services import (
             document_parser,
             embedding_generator,
-            rag_service,
             reranker_service,
             vector_store,
         )
+        from app.services.grpc import chat_service, knowledge_base_service
 
         assert document_parser is not None
         assert embedding_generator is not None
-        assert rag_service is not None
+        assert chat_service is not None
+        assert knowledge_base_service is not None
         assert reranker_service is not None
         assert vector_store is not None
     except ImportError as e:

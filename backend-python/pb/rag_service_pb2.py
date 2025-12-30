@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"R\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12 \n\x06\x63onfig\x18\x03 \x01(\x0b\x32\x10.rag.QueryConfig\";\n\x0bQueryConfig\x12\x17\n\x0f\x63ollection_name\x18\x01 \x01(\t\x12\x13\n\x0bmax_results\x18\x02 \x01(\x05\"a\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\"O\n\x06Source\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x13\n\x0bpage_number\x18\x02 \x01(\x05\x12\x0f\n\x07snippet\x18\x03 \x01(\t\x12\r\n\x05score\x18\x04 \x01(\x02\"Q\n\rUploadRequest\x12\'\n\x08metadata\x18\x01 \x01(\x0b\x32\x13.rag.UploadMetadataH\x00\x12\x0f\n\x05\x63hunk\x18\x02 \x01(\x0cH\x00\x42\x06\n\x04\x64\x61ta\"8\n\x0eUploadMetadata\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x02 \x01(\t\"G\n\x0eUploadResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x14\n\x0c\x63hunks_count\x18\x02 \x01(\x05\x12\x0f\n\x07message\x18\x03 \x01(\t2x\n\nRagService\x12-\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x01\x12;\n\x0eUploadDocument\x12\x12.rag.UploadRequest\x1a\x13.rag.UploadResponse(\x01\x42\x06Z\x04./pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"0\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"a\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\"d\n\x06Source\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x13\n\x0bpage_number\x18\x03 \x01(\x05\x12\x0f\n\x07snippet\x18\x04 \x01(\t\x12\r\n\x05score\x18\x05 \x01(\x02\"Q\n\rUploadRequest\x12\'\n\x08metadata\x18\x01 \x01(\x0b\x32\x13.rag.UploadMetadataH\x00\x12\x0f\n\x05\x63hunk\x18\x02 \x01(\x0cH\x00\x42\x06\n\x04\x64\x61ta\"8\n\x0eUploadMetadata\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x02 \x01(\t\"\\\n\x0eUploadResponse\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x14\n\x0c\x63hunks_count\x18\x03 \x01(\x05\x12\x0f\n\x07message\x18\x04 \x01(\t\",\n\x15\x44\x65leteDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\"9\n\x16\x44\x65leteDocumentResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\"=\n\x14ListDocumentsRequest\x12\x11\n\tpage_size\x18\x01 \x01(\x05\x12\x12\n\npage_token\x18\x02 \x01(\t\"V\n\x15ListDocumentsResponse\x12$\n\tdocuments\x18\x01 \x03(\x0b\x32\x11.rag.DocumentInfo\x12\x17\n\x0fnext_page_token\x18\x02 \x01(\t\"e\n\x0c\x44ocumentInfo\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x18\n\x10upload_timestamp\x18\x03 \x01(\x03\x12\x14\n\x0c\x63hunks_count\x18\x04 \x01(\x05\x32<\n\x0b\x43hatService\x12-\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x01\x32\xe6\x01\n\x14KnowledgeBaseService\x12;\n\x0eUploadDocument\x12\x12.rag.UploadRequest\x1a\x13.rag.UploadResponse(\x01\x12I\n\x0e\x44\x65leteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponse\x12\x46\n\rListDocuments\x12\x19.rag.ListDocumentsRequest\x1a\x1a.rag.ListDocumentsResponseB\x06Z\x04./pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,19 +33,29 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\004./pb'
   _globals['_CHATREQUEST']._serialized_start=26
-  _globals['_CHATREQUEST']._serialized_end=108
-  _globals['_QUERYCONFIG']._serialized_start=110
-  _globals['_QUERYCONFIG']._serialized_end=169
-  _globals['_CHATRESPONSE']._serialized_start=171
-  _globals['_CHATRESPONSE']._serialized_end=268
-  _globals['_SOURCE']._serialized_start=270
-  _globals['_SOURCE']._serialized_end=349
-  _globals['_UPLOADREQUEST']._serialized_start=351
-  _globals['_UPLOADREQUEST']._serialized_end=432
-  _globals['_UPLOADMETADATA']._serialized_start=434
-  _globals['_UPLOADMETADATA']._serialized_end=490
-  _globals['_UPLOADRESPONSE']._serialized_start=492
-  _globals['_UPLOADRESPONSE']._serialized_end=563
-  _globals['_RAGSERVICE']._serialized_start=565
-  _globals['_RAGSERVICE']._serialized_end=685
+  _globals['_CHATREQUEST']._serialized_end=74
+  _globals['_CHATRESPONSE']._serialized_start=76
+  _globals['_CHATRESPONSE']._serialized_end=173
+  _globals['_SOURCE']._serialized_start=175
+  _globals['_SOURCE']._serialized_end=275
+  _globals['_UPLOADREQUEST']._serialized_start=277
+  _globals['_UPLOADREQUEST']._serialized_end=358
+  _globals['_UPLOADMETADATA']._serialized_start=360
+  _globals['_UPLOADMETADATA']._serialized_end=416
+  _globals['_UPLOADRESPONSE']._serialized_start=418
+  _globals['_UPLOADRESPONSE']._serialized_end=510
+  _globals['_DELETEDOCUMENTREQUEST']._serialized_start=512
+  _globals['_DELETEDOCUMENTREQUEST']._serialized_end=556
+  _globals['_DELETEDOCUMENTRESPONSE']._serialized_start=558
+  _globals['_DELETEDOCUMENTRESPONSE']._serialized_end=615
+  _globals['_LISTDOCUMENTSREQUEST']._serialized_start=617
+  _globals['_LISTDOCUMENTSREQUEST']._serialized_end=678
+  _globals['_LISTDOCUMENTSRESPONSE']._serialized_start=680
+  _globals['_LISTDOCUMENTSRESPONSE']._serialized_end=766
+  _globals['_DOCUMENTINFO']._serialized_start=768
+  _globals['_DOCUMENTINFO']._serialized_end=869
+  _globals['_CHATSERVICE']._serialized_start=871
+  _globals['_CHATSERVICE']._serialized_end=931
+  _globals['_KNOWLEDGEBASESERVICE']._serialized_start=934
+  _globals['_KNOWLEDGEBASESERVICE']._serialized_end=1164
 # @@protoc_insertion_point(module_scope)

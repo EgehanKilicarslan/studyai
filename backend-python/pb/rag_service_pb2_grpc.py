@@ -27,9 +27,9 @@ if _version_not_supported:
     )
 
 
-class RagServiceStub(object):
+class ChatServiceStub(object):
     """--------------------------------------------------------
-    RAG Service Definition
+    Chat Service Definition
     --------------------------------------------------------
     """
 
@@ -40,22 +40,16 @@ class RagServiceStub(object):
             channel: A grpc.Channel.
         """
         self.Chat = channel.unary_stream(
-            "/rag.RagService/Chat",
+            "/rag.ChatService/Chat",
             request_serializer=rag__service__pb2.ChatRequest.SerializeToString,
             response_deserializer=rag__service__pb2.ChatResponse.FromString,
             _registered_method=True,
         )
-        self.UploadDocument = channel.stream_unary(
-            "/rag.RagService/UploadDocument",
-            request_serializer=rag__service__pb2.UploadRequest.SerializeToString,
-            response_deserializer=rag__service__pb2.UploadResponse.FromString,
-            _registered_method=True,
-        )
 
 
-class RagServiceServicer(object):
+class ChatServiceServicer(object):
     """--------------------------------------------------------
-    RAG Service Definition
+    Chat Service Definition
     --------------------------------------------------------
     """
 
@@ -68,38 +62,24 @@ class RagServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
-    def UploadDocument(self, request_iterator, context):
-        """/ UploadDocument is an RPC that handles document uploads.
-        / It takes an UploadRequest with file details and content,
-        / and returns an UploadResponse indicating the status of the upload.
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
 
-
-def add_RagServiceServicer_to_server(servicer, server):
+def add_ChatServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
         "Chat": grpc.unary_stream_rpc_method_handler(
             servicer.Chat,
             request_deserializer=rag__service__pb2.ChatRequest.FromString,
             response_serializer=rag__service__pb2.ChatResponse.SerializeToString,
         ),
-        "UploadDocument": grpc.stream_unary_rpc_method_handler(
-            servicer.UploadDocument,
-            request_deserializer=rag__service__pb2.UploadRequest.FromString,
-            response_serializer=rag__service__pb2.UploadResponse.SerializeToString,
-        ),
     }
-    generic_handler = grpc.method_handlers_generic_handler("rag.RagService", rpc_method_handlers)
+    generic_handler = grpc.method_handlers_generic_handler("rag.ChatService", rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers("rag.RagService", rpc_method_handlers)
+    server.add_registered_method_handlers("rag.ChatService", rpc_method_handlers)
 
 
 # This class is part of an EXPERIMENTAL API.
-class RagService(object):
+class ChatService(object):
     """--------------------------------------------------------
-    RAG Service Definition
+    Chat Service Definition
     --------------------------------------------------------
     """
 
@@ -119,7 +99,7 @@ class RagService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            "/rag.RagService/Chat",
+            "/rag.ChatService/Chat",
             rag__service__pb2.ChatRequest.SerializeToString,
             rag__service__pb2.ChatResponse.FromString,
             options,
@@ -132,6 +112,102 @@ class RagService(object):
             metadata,
             _registered_method=True,
         )
+
+
+class KnowledgeBaseServiceStub(object):
+    """--------------------------------------------------------
+    Knowledge Base Service Definition
+    --------------------------------------------------------
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.UploadDocument = channel.stream_unary(
+            "/rag.KnowledgeBaseService/UploadDocument",
+            request_serializer=rag__service__pb2.UploadRequest.SerializeToString,
+            response_deserializer=rag__service__pb2.UploadResponse.FromString,
+            _registered_method=True,
+        )
+        self.DeleteDocument = channel.unary_unary(
+            "/rag.KnowledgeBaseService/DeleteDocument",
+            request_serializer=rag__service__pb2.DeleteDocumentRequest.SerializeToString,
+            response_deserializer=rag__service__pb2.DeleteDocumentResponse.FromString,
+            _registered_method=True,
+        )
+        self.ListDocuments = channel.unary_unary(
+            "/rag.KnowledgeBaseService/ListDocuments",
+            request_serializer=rag__service__pb2.ListDocumentsRequest.SerializeToString,
+            response_deserializer=rag__service__pb2.ListDocumentsResponse.FromString,
+            _registered_method=True,
+        )
+
+
+class KnowledgeBaseServiceServicer(object):
+    """--------------------------------------------------------
+    Knowledge Base Service Definition
+    --------------------------------------------------------
+    """
+
+    def UploadDocument(self, request_iterator, context):
+        """/ UploadDocument is an RPC that uploads a document in chunks.
+        / It takes a stream of UploadRequest messages and returns an UploadResponse.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def DeleteDocument(self, request, context):
+        """/ DeleteDocument is an RPC that deletes a specified document.
+        / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ListDocuments(self, request, context):
+        """/ ListDocuments is an RPC that lists all documents in the knowledge base.
+        / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+
+def add_KnowledgeBaseServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+        "UploadDocument": grpc.stream_unary_rpc_method_handler(
+            servicer.UploadDocument,
+            request_deserializer=rag__service__pb2.UploadRequest.FromString,
+            response_serializer=rag__service__pb2.UploadResponse.SerializeToString,
+        ),
+        "DeleteDocument": grpc.unary_unary_rpc_method_handler(
+            servicer.DeleteDocument,
+            request_deserializer=rag__service__pb2.DeleteDocumentRequest.FromString,
+            response_serializer=rag__service__pb2.DeleteDocumentResponse.SerializeToString,
+        ),
+        "ListDocuments": grpc.unary_unary_rpc_method_handler(
+            servicer.ListDocuments,
+            request_deserializer=rag__service__pb2.ListDocumentsRequest.FromString,
+            response_serializer=rag__service__pb2.ListDocumentsResponse.SerializeToString,
+        ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+        "rag.KnowledgeBaseService", rpc_method_handlers
+    )
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers("rag.KnowledgeBaseService", rpc_method_handlers)
+
+
+# This class is part of an EXPERIMENTAL API.
+class KnowledgeBaseService(object):
+    """--------------------------------------------------------
+    Knowledge Base Service Definition
+    --------------------------------------------------------
+    """
 
     @staticmethod
     def UploadDocument(
@@ -149,9 +225,69 @@ class RagService(object):
         return grpc.experimental.stream_unary(
             request_iterator,
             target,
-            "/rag.RagService/UploadDocument",
+            "/rag.KnowledgeBaseService/UploadDocument",
             rag__service__pb2.UploadRequest.SerializeToString,
             rag__service__pb2.UploadResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def DeleteDocument(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/rag.KnowledgeBaseService/DeleteDocument",
+            rag__service__pb2.DeleteDocumentRequest.SerializeToString,
+            rag__service__pb2.DeleteDocumentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ListDocuments(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/rag.KnowledgeBaseService/ListDocuments",
+            rag__service__pb2.ListDocumentsRequest.SerializeToString,
+            rag__service__pb2.ListDocumentsResponse.FromString,
             options,
             channel_credentials,
             insecure,

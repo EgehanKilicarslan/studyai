@@ -8,14 +8,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/api"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/models"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/service"
+	grpcClient "github.com/EgehanKilicarslan/studyai/backend-go/internal/grpc"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/handler"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/middleware"
-	"github.com/EgehanKilicarslan/studyai/backend-go/internal/rag"
 	pb "github.com/EgehanKilicarslan/studyai/backend-go/pb"
 )
 
@@ -136,27 +137,22 @@ func (m *MockAuthService) ValidateAccessToken(tokenString string) (uint, error) 
 	return args.Get(0).(uint), args.Error(1)
 }
 
-// ==================== MOCK RAG SERVICE ====================
+// ==================== MOCK CHAT SERVICE CLIENT ====================
 
-// MockRagServiceClient implements pb.RagServiceClient for testing
-type MockRagServiceClient struct {
+// MockChatServiceClient implements pb.ChatServiceClient for testing
+type MockChatServiceClient struct {
 	mock.Mock
 }
 
-func (m *MockRagServiceClient) Chat(ctx context.Context, in *pb.ChatRequest, opts ...grpc.CallOption) (pb.RagService_ChatClient, error) {
+func (m *MockChatServiceClient) Chat(ctx context.Context, in *pb.ChatRequest, opts ...grpc.CallOption) (pb.ChatService_ChatClient, error) {
 	args := m.Called(ctx, in)
-	return args.Get(0).(pb.RagService_ChatClient), args.Error(1)
-}
-
-func (m *MockRagServiceClient) UploadDocument(ctx context.Context, opts ...grpc.CallOption) (pb.RagService_UploadDocumentClient, error) {
-	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(pb.RagService_UploadDocumentClient), args.Error(1)
+	return args.Get(0).(pb.ChatService_ChatClient), args.Error(1)
 }
 
-// MockChatStream implements pb.RagService_ChatClient for testing
+// MockChatStream implements pb.ChatService_ChatClient for testing
 type MockChatStream struct {
 	grpc.ClientStream
 	mock.Mock
@@ -170,7 +166,74 @@ func (m *MockChatStream) Recv() (*pb.ChatResponse, error) {
 	return nil, args.Error(1)
 }
 
-// MockUploadStream implements pb.RagService_UploadDocumentClient for testing
+func (m *MockChatStream) Header() (metadata.MD, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(metadata.MD), args.Error(1)
+}
+
+func (m *MockChatStream) Trailer() metadata.MD {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(metadata.MD)
+}
+
+func (m *MockChatStream) CloseSend() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockChatStream) Context() context.Context {
+	args := m.Called()
+	return args.Get(0).(context.Context)
+}
+
+func (m *MockChatStream) SendMsg(msg interface{}) error {
+	args := m.Called(msg)
+	return args.Error(0)
+}
+
+func (m *MockChatStream) RecvMsg(msg interface{}) error {
+	args := m.Called(msg)
+	return args.Error(0)
+}
+
+// ==================== MOCK KNOWLEDGE BASE SERVICE CLIENT ====================
+
+// MockKnowledgeBaseServiceClient implements pb.KnowledgeBaseServiceClient for testing
+type MockKnowledgeBaseServiceClient struct {
+	mock.Mock
+}
+
+func (m *MockKnowledgeBaseServiceClient) UploadDocument(ctx context.Context, opts ...grpc.CallOption) (pb.KnowledgeBaseService_UploadDocumentClient, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(pb.KnowledgeBaseService_UploadDocumentClient), args.Error(1)
+}
+
+func (m *MockKnowledgeBaseServiceClient) DeleteDocument(ctx context.Context, in *pb.DeleteDocumentRequest, opts ...grpc.CallOption) (*pb.DeleteDocumentResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.DeleteDocumentResponse), args.Error(1)
+}
+
+func (m *MockKnowledgeBaseServiceClient) ListDocuments(ctx context.Context, in *pb.ListDocumentsRequest, opts ...grpc.CallOption) (*pb.ListDocumentsResponse, error) {
+	args := m.Called(ctx, in)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*pb.ListDocumentsResponse), args.Error(1)
+}
+
+// MockUploadStream implements pb.KnowledgeBaseService_UploadDocumentClient for testing
 type MockUploadStream struct {
 	grpc.ClientStream
 	mock.Mock
@@ -183,7 +246,46 @@ func (m *MockUploadStream) Send(req *pb.UploadRequest) error {
 
 func (m *MockUploadStream) CloseAndRecv() (*pb.UploadResponse, error) {
 	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*pb.UploadResponse), args.Error(1)
+}
+
+func (m *MockUploadStream) Header() (metadata.MD, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(metadata.MD), args.Error(1)
+}
+
+func (m *MockUploadStream) Trailer() metadata.MD {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(metadata.MD)
+}
+
+func (m *MockUploadStream) CloseSend() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockUploadStream) Context() context.Context {
+	args := m.Called()
+	return args.Get(0).(context.Context)
+}
+
+func (m *MockUploadStream) SendMsg(msg interface{}) error {
+	args := m.Called(msg)
+	return args.Error(0)
+}
+
+func (m *MockUploadStream) RecvMsg(msg interface{}) error {
+	args := m.Called(msg)
+	return args.Error(0)
 }
 
 // ==================== TEST CONFIGURATION ====================
@@ -207,29 +309,40 @@ func TestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// ==================== MOCK GRPC CLIENT WRAPPER ====================
+
+// CreateMockGrpcClient creates a mock grpc.Client with mock services
+func CreateMockGrpcClient(chatClient *MockChatServiceClient, kbClient *MockKnowledgeBaseServiceClient) *grpcClient.Client {
+	return &grpcClient.Client{
+		ChatService:          chatClient,
+		KnowledgeBaseService: kbClient,
+	}
+}
+
 // ==================== ROUTER SETUP HELPERS ====================
 
 // SetupRouterWithMocks creates a router with mock services for testing
 func SetupRouterWithMocks(
-	ragClient *rag.Client,
+	grpcCli *grpcClient.Client,
 	authService service.AuthService,
 ) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	cfg := TestConfig()
 	logger := TestLogger()
 
-	apiHandler := handler.NewApiHandler(ragClient, cfg, logger)
+	chatHandler := handler.NewChatHandler(grpcCli, cfg, logger)
+	kbHandler := handler.NewKnowledgeBaseHandler(grpcCli, cfg, logger)
 	authHandler := handler.NewAuthHandler(authService, logger)
 	authMiddleware := middleware.NewAuthMiddleware(authService, logger)
 
-	return api.SetupRouter(apiHandler, authHandler, authMiddleware)
+	return api.SetupRouter(chatHandler, kbHandler, authHandler, authMiddleware)
 }
 
 // SetupRouterWithDefaultAuth creates a router with a default auth mock that accepts any token
-func SetupRouterWithDefaultAuth(ragClient *rag.Client) *gin.Engine {
+func SetupRouterWithDefaultAuth(grpcCli *grpcClient.Client) *gin.Engine {
 	mockAuthService := new(MockAuthService)
 	mockAuthService.On("ValidateAccessToken", mock.Anything).Return(uint(1), nil)
-	return SetupRouterWithMocks(ragClient, mockAuthService)
+	return SetupRouterWithMocks(grpcCli, mockAuthService)
 }
 
 // SetupAuthRouterWithRepos creates a router with auth service using mock repositories

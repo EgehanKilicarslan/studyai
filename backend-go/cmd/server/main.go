@@ -9,10 +9,10 @@ import (
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/repository"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/service"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/grpc"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/handler"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/logger"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/middleware"
-	"github.com/EgehanKilicarslan/studyai/backend-go/internal/rag"
 )
 
 func main() {
@@ -47,15 +47,17 @@ func main() {
 	authMiddleware := middleware.NewAuthMiddleware(authService, appLogger)
 
 	// 7. Start RAG Client
-	ragClient, err := rag.NewClient(cfg.AIServiceAddr, false)
+	grpcClient, err := grpc.NewClient(cfg.AIServiceAddr, false)
 	if err != nil {
 		appLogger.Error("❌ Failed to connect to Python service", "error", err)
 	}
-	defer ragClient.Close()
+	defer grpcClient.Close()
 
-	// 8. Setup API Handler and Router
-	apiHandler := handler.NewApiHandler(ragClient, cfg, appLogger)
-	r := api.SetupRouter(apiHandler, authHandler, authMiddleware)
+	// 8. Setup Chat and KnowledgeBase Handlers and Router
+	chatHandler := handler.NewChatHandler(grpcClient, cfg, appLogger)
+	knowledgeBaseHandler := handler.NewKnowledgeBaseHandler(grpcClient, cfg, appLogger)
+
+	r := api.SetupRouter(chatHandler, knowledgeBaseHandler, authHandler, authMiddleware)
 
 	// 9. Start Server
 	addr := fmt.Sprintf(":%s", cfg.ApiServicePort)

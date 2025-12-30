@@ -15,20 +15,27 @@ async def serve():
     app_logger = container.app_logger()
     app_logger.setup()
 
+    database = container.database()
+    await database.connect()
+
     logger = app_logger.get_logger(__name__)
 
-    rag_service_instance = container.rag_service()
+    chat_service_instance = container.chat_service()
+    knowledge_base_service_instance = container.knowledge_base_service()
 
     # 3. Start gRPC Server in async mode
     server = grpc.aio.server()
 
     # Save service
-    rag_service_pb2_grpc.add_RagServiceServicer_to_server(rag_service_instance, server)
+    rag_service_pb2_grpc.add_ChatServiceServicer_to_server(chat_service_instance, server)
+    rag_service_pb2_grpc.add_KnowledgeBaseServiceServicer_to_server(
+        knowledge_base_service_instance, server
+    )
 
     server.add_insecure_port(f"[::]:{settings.ai_service_port}")
 
     logger.info("🚀 [Python] AI Service Started (DI Enabled)!")
-    logger.info(f"   -> Active LLM: {rag_service_instance.llm.provider_name}")
+    logger.info(f"   -> Active LLM: {settings.llm_provider}")
 
     await server.start()
 

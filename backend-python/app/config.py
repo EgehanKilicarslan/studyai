@@ -12,6 +12,12 @@ class Settings(BaseSettings):
 
     ai_service_port: int = Field(default=50051)
 
+    postgresql_host: str = Field(default="db")
+    postgresql_port: int = Field(default=5432)
+    postgresql_user: str = Field(default="studyai_user")
+    postgresql_password: str = Field(default="studyai_password")
+    postgresql_database: str = Field(default="studyai_db")
+
     llm_provider: str = Field(default="dummy", pattern="^(openai|gemini|anthropic|dummy)$")
     llm_base_url: Optional[str] = Field(default=None)
     llm_api_key: Optional[str] = Field(default=None)
@@ -45,6 +51,17 @@ class Settings(BaseSettings):
     class ConfigDict:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+    @property
+    def database_url(self) -> str:
+        """Construct the database URL from components."""
+        return (
+            f"postgresql+asyncpg://{self.postgresql_user}:"
+            f"{self.postgresql_password}@"
+            f"{self.postgresql_host}:"
+            f"{self.postgresql_port}/"
+            f"{self.postgresql_database}"
+        )
 
 
 settings = Settings()

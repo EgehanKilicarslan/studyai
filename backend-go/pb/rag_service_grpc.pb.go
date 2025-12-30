@@ -19,39 +19,34 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RagService_Chat_FullMethodName           = "/rag.RagService/Chat"
-	RagService_UploadDocument_FullMethodName = "/rag.RagService/UploadDocument"
+	ChatService_Chat_FullMethodName = "/rag.ChatService/Chat"
 )
 
-// RagServiceClient is the client API for RagService service.
+// ChatServiceClient is the client API for ChatService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // --------------------------------------------------------
-// RAG Service Definition
+// Chat Service Definition
 // --------------------------------------------------------
-type RagServiceClient interface {
+type ChatServiceClient interface {
 	// / Chat is an RPC that processes a user's query and returns a response.
 	// / It takes a ChatRequest containing the query, session ID, and configuration,
 	// / and returns a ChatResponse with the generated answer and source documents.
 	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error)
-	// / UploadDocument is an RPC that handles document uploads.
-	// / It takes an UploadRequest with file details and content,
-	// / and returns an UploadResponse indicating the status of the upload.
-	UploadDocument(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadRequest, UploadResponse], error)
 }
 
-type ragServiceClient struct {
+type chatServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewRagServiceClient(cc grpc.ClientConnInterface) RagServiceClient {
-	return &ragServiceClient{cc}
+func NewChatServiceClient(cc grpc.ClientConnInterface) ChatServiceClient {
+	return &chatServiceClient{cc}
 }
 
-func (c *ragServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error) {
+func (c *chatServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &RagService_ServiceDesc.Streams[0], RagService_Chat_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ChatService_ServiceDesc.Streams[0], ChatService_Chat_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -66,11 +61,118 @@ func (c *ragServiceClient) Chat(ctx context.Context, in *ChatRequest, opts ...gr
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type RagService_ChatClient = grpc.ServerStreamingClient[ChatResponse]
+type ChatService_ChatClient = grpc.ServerStreamingClient[ChatResponse]
 
-func (c *ragServiceClient) UploadDocument(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadRequest, UploadResponse], error) {
+// ChatServiceServer is the server API for ChatService service.
+// All implementations must embed UnimplementedChatServiceServer
+// for forward compatibility.
+//
+// --------------------------------------------------------
+// Chat Service Definition
+// --------------------------------------------------------
+type ChatServiceServer interface {
+	// / Chat is an RPC that processes a user's query and returns a response.
+	// / It takes a ChatRequest containing the query, session ID, and configuration,
+	// / and returns a ChatResponse with the generated answer and source documents.
+	Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error
+	mustEmbedUnimplementedChatServiceServer()
+}
+
+// UnimplementedChatServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedChatServiceServer struct{}
+
+func (UnimplementedChatServiceServer) Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error {
+	return status.Error(codes.Unimplemented, "method Chat not implemented")
+}
+func (UnimplementedChatServiceServer) mustEmbedUnimplementedChatServiceServer() {}
+func (UnimplementedChatServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeChatServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ChatServiceServer will
+// result in compilation errors.
+type UnsafeChatServiceServer interface {
+	mustEmbedUnimplementedChatServiceServer()
+}
+
+func RegisterChatServiceServer(s grpc.ServiceRegistrar, srv ChatServiceServer) {
+	// If the following call panics, it indicates UnimplementedChatServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ChatService_ServiceDesc, srv)
+}
+
+func _ChatService_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ChatRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ChatServiceServer).Chat(m, &grpc.GenericServerStream[ChatRequest, ChatResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ChatService_ChatServer = grpc.ServerStreamingServer[ChatResponse]
+
+// ChatService_ServiceDesc is the grpc.ServiceDesc for ChatService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ChatService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rag.ChatService",
+	HandlerType: (*ChatServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Chat",
+			Handler:       _ChatService_Chat_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "rag_service.proto",
+}
+
+const (
+	KnowledgeBaseService_UploadDocument_FullMethodName = "/rag.KnowledgeBaseService/UploadDocument"
+	KnowledgeBaseService_DeleteDocument_FullMethodName = "/rag.KnowledgeBaseService/DeleteDocument"
+	KnowledgeBaseService_ListDocuments_FullMethodName  = "/rag.KnowledgeBaseService/ListDocuments"
+)
+
+// KnowledgeBaseServiceClient is the client API for KnowledgeBaseService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// --------------------------------------------------------
+// Knowledge Base Service Definition
+// --------------------------------------------------------
+type KnowledgeBaseServiceClient interface {
+	// / UploadDocument is an RPC that uploads a document in chunks.
+	// / It takes a stream of UploadRequest messages and returns an UploadResponse.
+	UploadDocument(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadRequest, UploadResponse], error)
+	// / DeleteDocument is an RPC that deletes a specified document.
+	// / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
+	DeleteDocument(ctx context.Context, in *DeleteDocumentRequest, opts ...grpc.CallOption) (*DeleteDocumentResponse, error)
+	// / ListDocuments is an RPC that lists all documents in the knowledge base.
+	// / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
+	ListDocuments(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*ListDocumentsResponse, error)
+}
+
+type knowledgeBaseServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewKnowledgeBaseServiceClient(cc grpc.ClientConnInterface) KnowledgeBaseServiceClient {
+	return &knowledgeBaseServiceClient{cc}
+}
+
+func (c *knowledgeBaseServiceClient) UploadDocument(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadRequest, UploadResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &RagService_ServiceDesc.Streams[1], RagService_UploadDocument_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &KnowledgeBaseService_ServiceDesc.Streams[0], KnowledgeBaseService_UploadDocument_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,95 +181,148 @@ func (c *ragServiceClient) UploadDocument(ctx context.Context, opts ...grpc.Call
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type RagService_UploadDocumentClient = grpc.ClientStreamingClient[UploadRequest, UploadResponse]
+type KnowledgeBaseService_UploadDocumentClient = grpc.ClientStreamingClient[UploadRequest, UploadResponse]
 
-// RagServiceServer is the server API for RagService service.
-// All implementations must embed UnimplementedRagServiceServer
+func (c *knowledgeBaseServiceClient) DeleteDocument(ctx context.Context, in *DeleteDocumentRequest, opts ...grpc.CallOption) (*DeleteDocumentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteDocumentResponse)
+	err := c.cc.Invoke(ctx, KnowledgeBaseService_DeleteDocument_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *knowledgeBaseServiceClient) ListDocuments(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*ListDocumentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDocumentsResponse)
+	err := c.cc.Invoke(ctx, KnowledgeBaseService_ListDocuments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// KnowledgeBaseServiceServer is the server API for KnowledgeBaseService service.
+// All implementations must embed UnimplementedKnowledgeBaseServiceServer
 // for forward compatibility.
 //
 // --------------------------------------------------------
-// RAG Service Definition
+// Knowledge Base Service Definition
 // --------------------------------------------------------
-type RagServiceServer interface {
-	// / Chat is an RPC that processes a user's query and returns a response.
-	// / It takes a ChatRequest containing the query, session ID, and configuration,
-	// / and returns a ChatResponse with the generated answer and source documents.
-	Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error
-	// / UploadDocument is an RPC that handles document uploads.
-	// / It takes an UploadRequest with file details and content,
-	// / and returns an UploadResponse indicating the status of the upload.
+type KnowledgeBaseServiceServer interface {
+	// / UploadDocument is an RPC that uploads a document in chunks.
+	// / It takes a stream of UploadRequest messages and returns an UploadResponse.
 	UploadDocument(grpc.ClientStreamingServer[UploadRequest, UploadResponse]) error
-	mustEmbedUnimplementedRagServiceServer()
+	// / DeleteDocument is an RPC that deletes a specified document.
+	// / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
+	DeleteDocument(context.Context, *DeleteDocumentRequest) (*DeleteDocumentResponse, error)
+	// / ListDocuments is an RPC that lists all documents in the knowledge base.
+	// / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
+	ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error)
+	mustEmbedUnimplementedKnowledgeBaseServiceServer()
 }
 
-// UnimplementedRagServiceServer must be embedded to have
+// UnimplementedKnowledgeBaseServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedRagServiceServer struct{}
+type UnimplementedKnowledgeBaseServiceServer struct{}
 
-func (UnimplementedRagServiceServer) Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error {
-	return status.Error(codes.Unimplemented, "method Chat not implemented")
-}
-func (UnimplementedRagServiceServer) UploadDocument(grpc.ClientStreamingServer[UploadRequest, UploadResponse]) error {
+func (UnimplementedKnowledgeBaseServiceServer) UploadDocument(grpc.ClientStreamingServer[UploadRequest, UploadResponse]) error {
 	return status.Error(codes.Unimplemented, "method UploadDocument not implemented")
 }
-func (UnimplementedRagServiceServer) mustEmbedUnimplementedRagServiceServer() {}
-func (UnimplementedRagServiceServer) testEmbeddedByValue()                    {}
+func (UnimplementedKnowledgeBaseServiceServer) DeleteDocument(context.Context, *DeleteDocumentRequest) (*DeleteDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteDocument not implemented")
+}
+func (UnimplementedKnowledgeBaseServiceServer) ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDocuments not implemented")
+}
+func (UnimplementedKnowledgeBaseServiceServer) mustEmbedUnimplementedKnowledgeBaseServiceServer() {}
+func (UnimplementedKnowledgeBaseServiceServer) testEmbeddedByValue()                              {}
 
-// UnsafeRagServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to RagServiceServer will
+// UnsafeKnowledgeBaseServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to KnowledgeBaseServiceServer will
 // result in compilation errors.
-type UnsafeRagServiceServer interface {
-	mustEmbedUnimplementedRagServiceServer()
+type UnsafeKnowledgeBaseServiceServer interface {
+	mustEmbedUnimplementedKnowledgeBaseServiceServer()
 }
 
-func RegisterRagServiceServer(s grpc.ServiceRegistrar, srv RagServiceServer) {
-	// If the following call panics, it indicates UnimplementedRagServiceServer was
+func RegisterKnowledgeBaseServiceServer(s grpc.ServiceRegistrar, srv KnowledgeBaseServiceServer) {
+	// If the following call panics, it indicates UnimplementedKnowledgeBaseServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&RagService_ServiceDesc, srv)
+	s.RegisterService(&KnowledgeBaseService_ServiceDesc, srv)
 }
 
-func _RagService_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ChatRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _KnowledgeBaseService_UploadDocument_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(KnowledgeBaseServiceServer).UploadDocument(&grpc.GenericServerStream[UploadRequest, UploadResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type KnowledgeBaseService_UploadDocumentServer = grpc.ClientStreamingServer[UploadRequest, UploadResponse]
+
+func _KnowledgeBaseService_DeleteDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteDocumentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	return srv.(RagServiceServer).Chat(m, &grpc.GenericServerStream[ChatRequest, ChatResponse]{ServerStream: stream})
+	if interceptor == nil {
+		return srv.(KnowledgeBaseServiceServer).DeleteDocument(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KnowledgeBaseService_DeleteDocument_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KnowledgeBaseServiceServer).DeleteDocument(ctx, req.(*DeleteDocumentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type RagService_ChatServer = grpc.ServerStreamingServer[ChatResponse]
-
-func _RagService_UploadDocument_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(RagServiceServer).UploadDocument(&grpc.GenericServerStream[UploadRequest, UploadResponse]{ServerStream: stream})
+func _KnowledgeBaseService_ListDocuments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDocumentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KnowledgeBaseServiceServer).ListDocuments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KnowledgeBaseService_ListDocuments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KnowledgeBaseServiceServer).ListDocuments(ctx, req.(*ListDocumentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type RagService_UploadDocumentServer = grpc.ClientStreamingServer[UploadRequest, UploadResponse]
-
-// RagService_ServiceDesc is the grpc.ServiceDesc for RagService service.
+// KnowledgeBaseService_ServiceDesc is the grpc.ServiceDesc for KnowledgeBaseService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var RagService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "rag.RagService",
-	HandlerType: (*RagServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+var KnowledgeBaseService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rag.KnowledgeBaseService",
+	HandlerType: (*KnowledgeBaseServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "Chat",
-			Handler:       _RagService_Chat_Handler,
-			ServerStreams: true,
+			MethodName: "DeleteDocument",
+			Handler:    _KnowledgeBaseService_DeleteDocument_Handler,
 		},
 		{
+			MethodName: "ListDocuments",
+			Handler:    _KnowledgeBaseService_ListDocuments_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
 			StreamName:    "UploadDocument",
-			Handler:       _RagService_UploadDocument_Handler,
+			Handler:       _KnowledgeBaseService_UploadDocument_Handler,
 			ClientStreams: true,
 		},
 	},

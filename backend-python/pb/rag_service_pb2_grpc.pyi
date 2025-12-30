@@ -25,8 +25,8 @@ class _ServicerContext(grpc.ServicerContext, grpc.aio.ServicerContext):  # type:
 
 GRPC_GENERATED_VERSION: str
 GRPC_VERSION: str
-_RagServiceChatType = typing_extensions.TypeVar(
-    '_RagServiceChatType',
+_ChatServiceChatType = typing_extensions.TypeVar(
+    '_ChatServiceChatType',
     grpc.UnaryStreamMultiCallable[
         rag_service_pb2.ChatRequest,
         rag_service_pb2.ChatResponse,
@@ -41,78 +41,44 @@ _RagServiceChatType = typing_extensions.TypeVar(
     ],
 )
 
-_RagServiceUploadDocumentType = typing_extensions.TypeVar(
-    '_RagServiceUploadDocumentType',
-    grpc.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
-    ],
-    grpc.aio.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
-    ],
-    default=grpc.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
-    ],
-)
-
-class RagServiceStub(typing.Generic[_RagServiceChatType, _RagServiceUploadDocumentType]):
+class ChatServiceStub(typing.Generic[_ChatServiceChatType]):
     """--------------------------------------------------------
-    RAG Service Definition
+    Chat Service Definition
     --------------------------------------------------------
     """
 
     @typing.overload
-    def __init__(self: RagServiceStub[
+    def __init__(self: ChatServiceStub[
         grpc.UnaryStreamMultiCallable[
             rag_service_pb2.ChatRequest,
             rag_service_pb2.ChatResponse,
         ],
-        grpc.StreamUnaryMultiCallable[
-            rag_service_pb2.UploadRequest,
-            rag_service_pb2.UploadResponse,
-        ],
     ], channel: grpc.Channel) -> None: ...
 
     @typing.overload
-    def __init__(self: RagServiceStub[
+    def __init__(self: ChatServiceStub[
         grpc.aio.UnaryStreamMultiCallable[
             rag_service_pb2.ChatRequest,
             rag_service_pb2.ChatResponse,
         ],
-        grpc.aio.StreamUnaryMultiCallable[
-            rag_service_pb2.UploadRequest,
-            rag_service_pb2.UploadResponse,
-        ],
     ], channel: grpc.aio.Channel) -> None: ...
 
-    Chat: _RagServiceChatType
+    Chat: _ChatServiceChatType
     """/ Chat is an RPC that processes a user's query and returns a response.
     / It takes a ChatRequest containing the query, session ID, and configuration,
     / and returns a ChatResponse with the generated answer and source documents.
     """
 
-    UploadDocument: _RagServiceUploadDocumentType
-    """/ UploadDocument is an RPC that handles document uploads.
-    / It takes an UploadRequest with file details and content,
-    / and returns an UploadResponse indicating the status of the upload.
-    """
-
-RagServiceAsyncStub: typing_extensions.TypeAlias = RagServiceStub[
+ChatServiceAsyncStub: typing_extensions.TypeAlias = ChatServiceStub[
     grpc.aio.UnaryStreamMultiCallable[
         rag_service_pb2.ChatRequest,
         rag_service_pb2.ChatResponse,
     ],
-    grpc.aio.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
-    ],
 ]
 
-class RagServiceServicer(metaclass=abc.ABCMeta):
+class ChatServiceServicer(metaclass=abc.ABCMeta):
     """--------------------------------------------------------
-    RAG Service Definition
+    Chat Service Definition
     --------------------------------------------------------
     """
 
@@ -127,15 +93,158 @@ class RagServiceServicer(metaclass=abc.ABCMeta):
         / and returns a ChatResponse with the generated answer and source documents.
         """
 
+def add_ChatServiceServicer_to_server(servicer: ChatServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...
+
+_KnowledgeBaseServiceUploadDocumentType = typing_extensions.TypeVar(
+    '_KnowledgeBaseServiceUploadDocumentType',
+    grpc.StreamUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
+    ],
+    grpc.aio.StreamUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
+    ],
+    default=grpc.StreamUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
+    ],
+)
+
+_KnowledgeBaseServiceDeleteDocumentType = typing_extensions.TypeVar(
+    '_KnowledgeBaseServiceDeleteDocumentType',
+    grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.DeleteDocumentRequest,
+        rag_service_pb2.DeleteDocumentResponse,
+    ],
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.DeleteDocumentRequest,
+        rag_service_pb2.DeleteDocumentResponse,
+    ],
+    default=grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.DeleteDocumentRequest,
+        rag_service_pb2.DeleteDocumentResponse,
+    ],
+)
+
+_KnowledgeBaseServiceListDocumentsType = typing_extensions.TypeVar(
+    '_KnowledgeBaseServiceListDocumentsType',
+    grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.ListDocumentsRequest,
+        rag_service_pb2.ListDocumentsResponse,
+    ],
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.ListDocumentsRequest,
+        rag_service_pb2.ListDocumentsResponse,
+    ],
+    default=grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.ListDocumentsRequest,
+        rag_service_pb2.ListDocumentsResponse,
+    ],
+)
+
+class KnowledgeBaseServiceStub(typing.Generic[_KnowledgeBaseServiceUploadDocumentType, _KnowledgeBaseServiceDeleteDocumentType, _KnowledgeBaseServiceListDocumentsType]):
+    """--------------------------------------------------------
+    Knowledge Base Service Definition
+    --------------------------------------------------------
+    """
+
+    @typing.overload
+    def __init__(self: KnowledgeBaseServiceStub[
+        grpc.StreamUnaryMultiCallable[
+            rag_service_pb2.UploadRequest,
+            rag_service_pb2.UploadResponse,
+        ],
+        grpc.UnaryUnaryMultiCallable[
+            rag_service_pb2.DeleteDocumentRequest,
+            rag_service_pb2.DeleteDocumentResponse,
+        ],
+        grpc.UnaryUnaryMultiCallable[
+            rag_service_pb2.ListDocumentsRequest,
+            rag_service_pb2.ListDocumentsResponse,
+        ],
+    ], channel: grpc.Channel) -> None: ...
+
+    @typing.overload
+    def __init__(self: KnowledgeBaseServiceStub[
+        grpc.aio.StreamUnaryMultiCallable[
+            rag_service_pb2.UploadRequest,
+            rag_service_pb2.UploadResponse,
+        ],
+        grpc.aio.UnaryUnaryMultiCallable[
+            rag_service_pb2.DeleteDocumentRequest,
+            rag_service_pb2.DeleteDocumentResponse,
+        ],
+        grpc.aio.UnaryUnaryMultiCallable[
+            rag_service_pb2.ListDocumentsRequest,
+            rag_service_pb2.ListDocumentsResponse,
+        ],
+    ], channel: grpc.aio.Channel) -> None: ...
+
+    UploadDocument: _KnowledgeBaseServiceUploadDocumentType
+    """/ UploadDocument is an RPC that uploads a document in chunks.
+    / It takes a stream of UploadRequest messages and returns an UploadResponse.
+    """
+
+    DeleteDocument: _KnowledgeBaseServiceDeleteDocumentType
+    """/ DeleteDocument is an RPC that deletes a specified document.
+    / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
+    """
+
+    ListDocuments: _KnowledgeBaseServiceListDocumentsType
+    """/ ListDocuments is an RPC that lists all documents in the knowledge base.
+    / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
+    """
+
+KnowledgeBaseServiceAsyncStub: typing_extensions.TypeAlias = KnowledgeBaseServiceStub[
+    grpc.aio.StreamUnaryMultiCallable[
+        rag_service_pb2.UploadRequest,
+        rag_service_pb2.UploadResponse,
+    ],
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.DeleteDocumentRequest,
+        rag_service_pb2.DeleteDocumentResponse,
+    ],
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.ListDocumentsRequest,
+        rag_service_pb2.ListDocumentsResponse,
+    ],
+]
+
+class KnowledgeBaseServiceServicer(metaclass=abc.ABCMeta):
+    """--------------------------------------------------------
+    Knowledge Base Service Definition
+    --------------------------------------------------------
+    """
+
     @abc.abstractmethod
     def UploadDocument(
         self,
         request_iterator: _MaybeAsyncIterator[rag_service_pb2.UploadRequest],
         context: _ServicerContext,
     ) -> typing.Union[rag_service_pb2.UploadResponse, collections.abc.Awaitable[rag_service_pb2.UploadResponse]]:
-        """/ UploadDocument is an RPC that handles document uploads.
-        / It takes an UploadRequest with file details and content,
-        / and returns an UploadResponse indicating the status of the upload.
+        """/ UploadDocument is an RPC that uploads a document in chunks.
+        / It takes a stream of UploadRequest messages and returns an UploadResponse.
         """
 
-def add_RagServiceServicer_to_server(servicer: RagServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...
+    @abc.abstractmethod
+    def DeleteDocument(
+        self,
+        request: rag_service_pb2.DeleteDocumentRequest,
+        context: _ServicerContext,
+    ) -> typing.Union[rag_service_pb2.DeleteDocumentResponse, collections.abc.Awaitable[rag_service_pb2.DeleteDocumentResponse]]:
+        """/ DeleteDocument is an RPC that deletes a specified document.
+        / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
+        """
+
+    @abc.abstractmethod
+    def ListDocuments(
+        self,
+        request: rag_service_pb2.ListDocumentsRequest,
+        context: _ServicerContext,
+    ) -> typing.Union[rag_service_pb2.ListDocumentsResponse, collections.abc.Awaitable[rag_service_pb2.ListDocumentsResponse]]:
+        """/ ListDocuments is an RPC that lists all documents in the knowledge base.
+        / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
+        """
+
+def add_KnowledgeBaseServiceServicer_to_server(servicer: KnowledgeBaseServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...
