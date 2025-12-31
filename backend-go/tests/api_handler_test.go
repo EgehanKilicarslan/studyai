@@ -24,7 +24,7 @@ func TestHealthCheck(t *testing.T) {
 	router := testutil.SetupRouterWithDefaultAuth(nil)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/health", nil)
+	req, _ := http.NewRequest("GET", testutil.HealthCheckEndpoint, nil)
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, 200, w.Code)
@@ -126,7 +126,7 @@ func TestChatHandler(t *testing.T) {
 				body = bytes.NewBuffer(jsonBody)
 			}
 
-			req, _ := http.NewRequest("POST", "/api/chat", body)
+			req, _ := http.NewRequest("POST", testutil.ChatEndpoint, body)
 			req.Header.Set("Content-Type", "application/json")
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
@@ -160,7 +160,7 @@ func TestChatHandler_Unauthorized(t *testing.T) {
 
 	reqBody := map[string]string{"query": "Hi", "session_id": "1"}
 	jsonBody, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/api/chat", bytes.NewBuffer(jsonBody))
+	req, _ := http.NewRequest("POST", testutil.ChatEndpoint, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer invalid-token")
 
@@ -189,7 +189,7 @@ func TestUploadHandler(t *testing.T) {
 				part.Write([]byte("dummy content"))
 				writer.Close()
 
-				req, _ := http.NewRequest("POST", "/api/upload", body)
+				req, _ := http.NewRequest("POST", testutil.UploadEndpoint, body)
 				req.Header.Set("Content-Type", writer.FormDataContentType())
 				req.Header.Set("Authorization", "Bearer test-token")
 				return req, nil
@@ -214,7 +214,7 @@ func TestUploadHandler(t *testing.T) {
 		{
 			name: "no file",
 			setupRequest: func() (*http.Request, error) {
-				req, _ := http.NewRequest("POST", "/api/upload", nil)
+				req, _ := http.NewRequest("POST", testutil.UploadEndpoint, nil)
 				req.Header.Set("Content-Type", "multipart/form-data")
 				req.Header.Set("Authorization", "Bearer test-token")
 				return req, nil
@@ -228,7 +228,7 @@ func TestUploadHandler(t *testing.T) {
 		{
 			name: "invalid content type",
 			setupRequest: func() (*http.Request, error) {
-				req, _ := http.NewRequest("POST", "/api/upload", bytes.NewBuffer([]byte("test")))
+				req, _ := http.NewRequest("POST", testutil.UploadEndpoint, bytes.NewBuffer([]byte("test")))
 				req.Header.Set("Content-Type", "application/json")
 				req.Header.Set("Authorization", "Bearer test-token")
 				return req, nil
@@ -248,7 +248,7 @@ func TestUploadHandler(t *testing.T) {
 				part.Write([]byte("content"))
 				writer.Close()
 
-				req, _ := http.NewRequest("POST", "/api/upload", body)
+				req, _ := http.NewRequest("POST", testutil.UploadEndpoint, body)
 				req.Header.Set("Content-Type", writer.FormDataContentType())
 				req.Header.Set("Authorization", "Bearer test-token")
 				return req, nil
@@ -267,7 +267,7 @@ func TestUploadHandler(t *testing.T) {
 				part.Write([]byte("content"))
 				writer.Close()
 
-				req, _ := http.NewRequest("POST", "/api/upload", body)
+				req, _ := http.NewRequest("POST", testutil.UploadEndpoint, body)
 				req.Header.Set("Content-Type", writer.FormDataContentType())
 				req.Header.Set("Authorization", "Bearer test-token")
 				return req, nil
@@ -288,7 +288,7 @@ func TestUploadHandler(t *testing.T) {
 				part.Write([]byte("content"))
 				writer.Close()
 
-				req, _ := http.NewRequest("POST", "/api/upload", body)
+				req, _ := http.NewRequest("POST", testutil.UploadEndpoint, body)
 				req.Header.Set("Content-Type", writer.FormDataContentType())
 				req.Header.Set("Authorization", "Bearer test-token")
 				return req, nil
@@ -339,7 +339,7 @@ func TestUploadHandler_Unauthorized(t *testing.T) {
 	part.Write([]byte("dummy content"))
 	writer.Close()
 
-	req, _ := http.NewRequest("POST", "/api/upload", body)
+	req, _ := http.NewRequest("POST", testutil.UploadEndpoint, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer invalid-token")
 
@@ -394,7 +394,7 @@ func TestDeleteDocumentHandler(t *testing.T) {
 			grpcCli := testutil.CreateMockGrpcClient(mockChatClient, mockKBClient)
 			router := testutil.SetupRouterWithDefaultAuth(grpcCli)
 
-			req, _ := http.NewRequest("DELETE", "/api/knowledge-base/"+tt.documentID, nil)
+			req, _ := http.NewRequest("DELETE", testutil.KnowledgeBaseDeleteURL+tt.documentID, nil)
 			req.Header.Set("Authorization", "Bearer test-token")
 
 			w := httptest.NewRecorder()
@@ -476,7 +476,7 @@ func TestListDocumentsHandler(t *testing.T) {
 			grpcCli := testutil.CreateMockGrpcClient(mockChatClient, mockKBClient)
 			router := testutil.SetupRouterWithDefaultAuth(grpcCli)
 
-			req, _ := http.NewRequest("GET", "/api/knowledge-base", nil)
+			req, _ := http.NewRequest("GET", testutil.KnowledgeBaseListURL, nil)
 			req.Header.Set("Authorization", "Bearer test-token")
 
 			w := httptest.NewRecorder()
@@ -498,7 +498,7 @@ func TestListDocumentsHandler_Unauthorized(t *testing.T) {
 
 	router := testutil.SetupRouterWithMocks(nil, mockAuthService)
 
-	req, _ := http.NewRequest("GET", "/api/knowledge-base", nil)
+	req, _ := http.NewRequest("GET", testutil.KnowledgeBaseListURL, nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 
 	w := httptest.NewRecorder()

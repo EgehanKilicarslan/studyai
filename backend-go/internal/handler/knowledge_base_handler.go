@@ -218,7 +218,7 @@ func (h *KnowledgeBaseHandler) UploadHandler(c *gin.Context) {
 	})
 }
 
-// DeleteHandler: DELETE /api/knowledge-base/:document_id
+// DeleteHandler: DELETE /api/v1/knowledge-base/:document_id
 func (h *KnowledgeBaseHandler) DeleteHandler(c *gin.Context) {
 	// Extract authenticated user ID
 	userID, exists := c.Get("userID")
@@ -279,7 +279,7 @@ func (h *KnowledgeBaseHandler) DeleteHandler(c *gin.Context) {
 	})
 }
 
-// ListHandler: GET /api/knowledge-base
+// ListHandler: GET /api/v1/knowledge-base
 func (h *KnowledgeBaseHandler) ListHandler(c *gin.Context) {
 	// Extract authenticated user ID
 	userID, exists := c.Get("userID")

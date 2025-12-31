@@ -27,7 +27,7 @@ func NewChatHandler(services *grpc.Client, cfg *config.Config, logger *slog.Logg
 	return &ChatHandler{services: services, cfg: cfg, logger: logger}
 }
 
-// ChatHandler: POST /api/chat
+// ChatHandler: POST /api/v1/chat
 func (h *ChatHandler) ChatHandler(c *gin.Context) {
 	// Extract authenticated user ID
 	userID, exists := c.Get("userID")

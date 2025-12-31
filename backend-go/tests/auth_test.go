@@ -403,7 +403,7 @@ func TestRegisterHandler(t *testing.T) {
 			router := testutil.SetupAuthRouterWithRepos(userRepo, tokenRepo)
 
 			jsonBody, _ := json.Marshal(tt.requestBody)
-			req, _ := http.NewRequest("POST", "/auth/register", bytes.NewBuffer(jsonBody))
+			req, _ := http.NewRequest("POST", testutil.RegisterEndpoint, bytes.NewBuffer(jsonBody))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -504,7 +504,7 @@ func TestLoginHandler(t *testing.T) {
 			router := testutil.SetupAuthRouterWithRepos(userRepo, tokenRepo)
 
 			jsonBody, _ := json.Marshal(tt.requestBody)
-			req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(jsonBody))
+			req, _ := http.NewRequest("POST", testutil.LoginEndpoint, bytes.NewBuffer(jsonBody))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -584,7 +584,7 @@ func TestRefreshHandler(t *testing.T) {
 			router := testutil.SetupAuthRouterWithRepos(userRepo, tokenRepo)
 
 			jsonBody, _ := json.Marshal(tt.requestBody)
-			req, _ := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(jsonBody))
+			req, _ := http.NewRequest("POST", testutil.RefreshTokenEndpoint, bytes.NewBuffer(jsonBody))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -648,7 +648,7 @@ func TestLogoutHandler(t *testing.T) {
 			router := testutil.SetupAuthRouterWithRepos(userRepo, tokenRepo)
 
 			jsonBody, _ := json.Marshal(tt.requestBody)
-			req, _ := http.NewRequest("POST", "/auth/logout", bytes.NewBuffer(jsonBody))
+			req, _ := http.NewRequest("POST", testutil.LogoutEndpoint, bytes.NewBuffer(jsonBody))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()

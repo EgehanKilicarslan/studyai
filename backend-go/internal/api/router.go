@@ -17,12 +17,12 @@ func SetupRouter(
 	r.SetTrustedProxies(nil)
 
 	// Public routes
-	r.GET("/health", func(c *gin.Context) {
+	r.GET("/api/v1/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	// Auth routes (Public)
-	authGroup := r.Group("/auth")
+	authGroup := r.Group("/api/v1/auth")
 	{
 		authGroup.POST("/register", authHandler.Register)
 		authGroup.POST("/login", authHandler.Login)
@@ -31,7 +31,7 @@ func SetupRouter(
 	}
 
 	// Protected API routes
-	api := r.Group("/api")
+	api := r.Group("/api/v1")
 	api.Use(authMiddleware.RequireAuth())
 	{
 		api.POST("/chat", chatHandler.ChatHandler)
