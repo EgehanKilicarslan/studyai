@@ -11,6 +11,7 @@ services:
       - .env
     volumes:
       - models:/home/appuser/.cache/models
+      - uploads:/tmp/studyai/uploads
     depends_on:
       vector-db:
         condition: service_started
@@ -30,6 +31,8 @@ services:
       - GIN_MODE=release
     env_file:
       - .env
+    volumes:
+      - uploads:/tmp/studyai/uploads
     depends_on:
       backend-python:
         condition: service_started
@@ -75,12 +78,33 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # 🔴 CACHE & SESSION STORE
+  redis:
+    image: redis:alpine
+    container_name: studyai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - studyai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   models:
     driver: local
   qdrant_storage:
     driver: local
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads:
     driver: local
 
 networks:

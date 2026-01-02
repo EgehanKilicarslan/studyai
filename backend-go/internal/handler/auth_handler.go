@@ -27,7 +27,9 @@ func NewAuthHandler(service service.AuthService, logger *slog.Logger) *AuthHandl
 
 // Request/Response DTOs
 type RegisterRequest struct {
+	Username string `json:"username" binding:"required,min=3,max=50"`
 	Email    string `json:"email" binding:"required,email"`
+	FullName string `json:"full_name" binding:"required,min=1,max=100"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
@@ -53,11 +55,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error("❌ [Handler] Invalid registration request", "error", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request. Email and password (min 6 chars) required."})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request. Username, email, full_name, and password (min 6 chars) required."})
 		return
 	}
 
-	user, tokens, err := h.service.Register(req.Email, req.Password)
+	user, tokens, err := h.service.Register(req.Username, req.Email, req.FullName, req.Password)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return

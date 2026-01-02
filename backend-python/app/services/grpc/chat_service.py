@@ -2,7 +2,7 @@ import time
 from typing import AsyncGenerator
 
 import grpc
-from database.service import DocumentService
+from database.service import ChunkService
 from llm import LLMProvider
 from logger import AppLogger
 from pb import rag_service_pb2 as rs
@@ -12,8 +12,10 @@ from ..embedding_generator import EmbeddingGenerator
 from ..reranker_service import RerankerService
 from ..vector_store import VectorStore
 
-# gRPC metadata key for user ID
+# gRPC metadata keys for tenant-scoped access
 USER_ID_METADATA_KEY = "x-user-id"
+ORGANIZATION_ID_METADATA_KEY = "x-organization-id"
+GROUP_IDS_METADATA_KEY = "x-group-ids"
 
 
 def get_user_id_from_context(context: grpc.aio.ServicerContext) -> int | None:
@@ -31,6 +33,42 @@ def get_user_id_from_context(context: grpc.aio.ServicerContext) -> int | None:
     return None
 
 
+def get_tenant_context_from_metadata(
+    context: grpc.aio.ServicerContext,
+) -> tuple[int | None, list[int] | None]:
+    """
+    Extract tenant context (organization_id, group_ids) from gRPC metadata headers.
+
+    Returns:
+        tuple: (organization_id, group_ids) where group_ids is a list of ints or None
+    """
+    invocation_metadata = context.invocation_metadata()
+    if invocation_metadata is None:
+        return None, None
+
+    metadata = {key: value for key, value in invocation_metadata}
+
+    # Extract organization_id
+    org_id: int | None = None
+    org_id_str = metadata.get(ORGANIZATION_ID_METADATA_KEY)
+    if org_id_str:
+        try:
+            org_id = int(org_id_str)
+        except ValueError:
+            pass
+
+    # Extract group_ids (comma-separated list)
+    group_ids: list[int] | None = None
+    group_ids_str = metadata.get(GROUP_IDS_METADATA_KEY)
+    if group_ids_str:
+        try:
+            group_ids = [int(g.strip()) for g in group_ids_str.split(",") if g.strip()]
+        except ValueError:
+            pass
+
+    return org_id, group_ids
+
+
 class ChatService(rs_grpc.ChatServiceServicer):
     def __init__(
         self,
@@ -39,14 +77,14 @@ class ChatService(rs_grpc.ChatServiceServicer):
         vector_store: VectorStore,
         embedder: EmbeddingGenerator,
         reranker: RerankerService,
-        document_service: DocumentService,
+        chunk_service: ChunkService,
     ):
         self.logger = logger.get_logger(__name__)
         self.llm: LLMProvider = llm_provider
         self.vector_store: VectorStore = vector_store
         self.embedding_service: EmbeddingGenerator = embedder
         self.reranker_service: RerankerService = reranker
-        self.document_service: DocumentService = document_service
+        self.chunk_service: ChunkService = chunk_service
 
     async def Chat(
         self, request: rs.ChatRequest, context: grpc.aio.ServicerContext
@@ -60,16 +98,29 @@ class ChatService(rs_grpc.ChatServiceServicer):
             yield rs.ChatResponse(answer="Unauthorized: User ID not provided.")
             return
 
+        # Extract tenant context for scoped search
+        organization_id, group_ids = get_tenant_context_from_metadata(context)
+        if organization_id is None:
+            self.logger.error("[ChatService] ❌ Organization ID not found in gRPC metadata")
+            yield rs.ChatResponse(answer="Unauthorized: Organization context not provided.")
+            return
+
         self.logger.info(
-            f"[ChatService] Question: {request.query} | Session: {request.session_id} | User: {user_id}"
+            f"[ChatService] Question: {request.query} | Session: {request.session_id} | "
+            f"User: {user_id} | Org: {organization_id} | Groups: {group_ids}"
         )
 
         try:
             # 1) Generate embedding for the query
             query_vec = (await self.embedding_service.generate([request.query]))[0]
 
-            # 2) Search for relevant vectors in Qdrant
-            raw_hits = await self.vector_store.search(query_vec, limit=25)
+            # 2) Search for relevant vectors in Qdrant with tenant filtering
+            raw_hits = await self.vector_store.search_with_tenant_filter(
+                query_vec,
+                organization_id=organization_id,
+                group_ids=group_ids,
+                limit=25,
+            )
 
             if not raw_hits:
                 self.logger.info("[ChatService] No documents found in initial search.")
@@ -80,7 +131,7 @@ class ChatService(rs_grpc.ChatServiceServicer):
 
             # 3) Fetch chunk content from PostgreSQL database
             chunk_ids = [str(hit.id) for hit in raw_hits]
-            chunks = await self.document_service.get_chunks_by_ids(chunk_ids)
+            chunks = await self.chunk_service.get_chunks_by_ids(chunk_ids)
 
             # Create a mapping from chunk_id to chunk for easy lookup
             chunk_map = {str(chunk.id): chunk for chunk in chunks}

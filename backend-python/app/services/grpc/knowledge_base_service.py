@@ -1,12 +1,9 @@
 import asyncio
-import hashlib
-import tempfile
 from pathlib import Path
-from typing import AsyncGenerator
 
 import grpc
 from config import Settings
-from database.service import DocumentService
+from database.service import ChunkService
 from logger import AppLogger
 from pb import rag_service_pb2 as rs
 from pb import rag_service_pb2_grpc as rs_grpc
@@ -15,26 +12,18 @@ from ..document_parser import DocumentParser
 from ..embedding_generator import EmbeddingGenerator
 from ..vector_store import VectorStore
 
-# gRPC metadata key for user ID
-USER_ID_METADATA_KEY = "x-user-id"
-
-
-def get_user_id_from_context(context: grpc.aio.ServicerContext) -> int | None:
-    """Extract user ID from gRPC metadata headers."""
-    invocation_metadata = context.invocation_metadata()
-    if invocation_metadata is None:
-        return None
-    metadata = {key: value for key, value in invocation_metadata}
-    user_id_str = metadata.get(USER_ID_METADATA_KEY)
-    if user_id_str:
-        try:
-            return int(user_id_str)
-        except ValueError:
-            return None
-    return None
-
 
 class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
+    """
+    Knowledge Base Service for document processing.
+
+    Go is the source of truth for documents (metadata, permissions, storage).
+    Python only handles:
+    - Parsing documents from file paths provided by Go
+    - Generating embeddings
+    - Storing vectors in Qdrant with multi-tenant metadata
+    """
+
     def __init__(
         self,
         settings: Settings,
@@ -42,252 +31,181 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
         vector_store: VectorStore,
         embedder: EmbeddingGenerator,
         parser: DocumentParser,
-        document_service: DocumentService,
+        chunk_service: ChunkService,
     ):
         self.logger = logger.get_logger(__name__)
         self.vector_store: VectorStore = vector_store
         self.embedding_service: EmbeddingGenerator = embedder
         self.document_parser: DocumentParser = parser
-        self.document_service: DocumentService = document_service
+        self.chunk_service: ChunkService = chunk_service
         self.max_file_size = settings.maximum_file_size
 
-    async def UploadDocument(
+    async def ProcessDocument(
         self,
-        request_iterator: AsyncGenerator[rs.UploadRequest, None],
+        request: rs.ProcessDocumentRequest,
         context: grpc.aio.ServicerContext,
-    ) -> rs.UploadResponse:
-        # Extract user_id from gRPC metadata headers
-        user_id = get_user_id_from_context(context)
-        if user_id is None:
-            self.logger.error("[KnowledgeBaseService] ❌ User ID not found in gRPC metadata")
-            return rs.UploadResponse(status="error", message="Unauthorized: User ID not provided.")
+    ) -> rs.ProcessDocumentResponse:
+        """
+        Process a document that was already saved to disk by Go.
 
-        filename = None
-        content_type = None
-        current_size = 0
-        temp_file = None
-        temp_file_path = None
-        metadata_received = False
-        file_hash = hashlib.sha256()
+        Go provides:
+        - document_id: UUID assigned by Go (source of truth)
+        - file_path: Path to the file on disk
+        - filename: Original filename
+        - content_type: MIME type
+        - organization_id: For multi-tenancy
+        - group_id: For group-level access (0 if org-wide)
+        - owner_id: Document owner
+
+        Python does:
+        - Parse the document from file_path
+        - Generate embeddings
+        - Store vectors in Qdrant with org/group metadata for filtering
+        """
+        document_id = request.document_id
+        file_path = request.file_path
+        filename = request.filename
+        # content_type is provided by Go but not currently used in parsing
+        # (document_parser determines type from file extension)
+        organization_id = request.organization_id
+        group_id = request.group_id if request.group_id > 0 else None
+        owner_id = request.owner_id
 
         self.logger.info(
-            f"[KnowledgeBaseService] UploadDocument stream started for user {user_id}..."
+            f"[KnowledgeBaseService] ProcessDocument request: "
+            f"doc_id={document_id}, file={filename}, org={organization_id}, group={group_id}"
         )
 
         try:
-            # 1) Create a temp file to store the uploaded content
-            temp_file = tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".tmp")
-            temp_file_path = temp_file.name
+            # 1) Verify file exists
+            file_path_obj = Path(file_path)
+            if not file_path_obj.exists():
+                self.logger.error(f"[KnowledgeBaseService] ❌ File not found: {file_path}")
+                return rs.ProcessDocumentResponse(
+                    document_id=document_id,
+                    status="error",
+                    chunks_count=0,
+                    message=f"File not found: {file_path}",
+                )
 
-            # 2) Process the incoming stream
-            async for request in request_iterator:
-                # A) Metadata check
-                if request.HasField("metadata"):
-                    if metadata_received:
-                        return rs.UploadResponse(
-                            status="error",
-                            message="Metadata already received. Multiple metadata messages not allowed.",
-                        )
-                    filename = request.metadata.filename
-                    content_type = request.metadata.content_type
-                    metadata_received = True
+            # 2) Check file size
+            file_size = file_path_obj.stat().st_size
+            if file_size > self.max_file_size:
+                self.logger.error(
+                    f"[KnowledgeBaseService] ❌ File too large: {file_size} > {self.max_file_size}"
+                )
+                return rs.ProcessDocumentResponse(
+                    document_id=document_id,
+                    status="error",
+                    chunks_count=0,
+                    message=f"File size ({file_size}) exceeds maximum ({self.max_file_size})",
+                )
 
-                # B) Chunk check
-                elif request.HasField("chunk"):
-                    if not metadata_received:
-                        return rs.UploadResponse(
-                            status="error",
-                            message="Security violation: Metadata must be sent before any file chunks.",
-                        )
-
-                    chunk_len = len(request.chunk)
-                    if current_size + chunk_len > self.max_file_size:
-                        return rs.UploadResponse(
-                            status="error",
-                            message=f"File size exceeds the maximum limit of {self.max_file_size} bytes.",
-                        )
-
-                    await asyncio.to_thread(temp_file.write, request.chunk)
-                    file_hash.update(request.chunk)
-                    current_size += chunk_len
-
-            # EOF reached, finalize the file
-            temp_file.close()
-            computed_hash = file_hash.hexdigest()
-
-            # 3) Validate received data
-            if not metadata_received or not filename:
-                return rs.UploadResponse(status="error", message="No metadata received.")
-
-            if current_size == 0:
-                return rs.UploadResponse(status="warning", message="Received empty file.")
-
-            # 4) Parse the document
+            # 3) Parse the document
+            self.logger.info(f"[KnowledgeBaseService] Parsing document: {filename}...")
             try:
-                self.logger.info(f"[KnowledgeBaseService] Parsing document: {filename}...")
                 text_chunks, metadatas = await asyncio.to_thread(
-                    self.document_parser.parse_file, temp_file_path, filename
+                    self.document_parser.parse_file, file_path, filename
                 )
             except ValueError as ve:
                 self.logger.warning(f"⚠️ Validation Error: {ve}")
-                return rs.UploadResponse(status="error", message=str(ve))
+                return rs.ProcessDocumentResponse(
+                    document_id=document_id,
+                    status="error",
+                    chunks_count=0,
+                    message=str(ve),
+                )
 
             if not text_chunks:
-                return rs.UploadResponse(
-                    status="warning", message="No text extracted from document."
+                return rs.ProcessDocumentResponse(
+                    document_id=document_id,
+                    status="warning",
+                    chunks_count=0,
+                    message="No text extracted from document.",
                 )
 
-            # 5) Register document in database and link to user
-            self.logger.info(f"[KnowledgeBaseService] Registering document for user {user_id}...")
-            document, is_new = await self.document_service.get_or_register_document(
-                user_id=user_id,
-                filename=filename,
-                file_hash=computed_hash,
-                chunk_count=len(text_chunks),
-                content_type=content_type or "application/octet-stream",
-            )
-
-            # If document already exists (same hash), skip storing chunks and vectors
-            if not is_new:
-                self.logger.info(
-                    f"[KnowledgeBaseService] Document already exists, linked to user {user_id}"
-                )
-                return rs.UploadResponse(
-                    document_id=str(document.id),
-                    status="success",
-                    chunks_count=int(document.chunk_count or 0),  # type: ignore[arg-type]
-                    message="Document already exists. Linked to your account.",
-                )
-
-            # 6) Store chunks in PostgreSQL database
+            # 4) Store chunks in PostgreSQL database
             self.logger.info(
                 f"[KnowledgeBaseService] Storing {len(text_chunks)} chunks in database..."
             )
-            stored_chunks = await self.document_service.store_chunks(
-                document_id=str(document.id),
+            stored_chunks = await self.chunk_service.store_chunks(
+                document_id=document_id,
                 text_chunks=text_chunks,
                 metadatas=metadatas,
             )
 
-            # 7) Generate embeddings
+            # 5) Generate embeddings
             self.logger.info(
                 f"[KnowledgeBaseService] Generating embeddings for {len(text_chunks)} chunks..."
             )
             vectors = await self.embedding_service.generate(text_chunks)
 
-            # 8) Upsert vectors into Qdrant (only vectors + chunk_id references)
+            # 6) Upsert vectors into Qdrant with multi-tenant metadata
             self.logger.info("[KnowledgeBaseService] Upserting vectors into vector store...")
             chunk_ids = [str(chunk.id) for chunk in stored_chunks]
-            count = await self.vector_store.upsert_vectors_with_chunk_ids(
+            count = await self.vector_store.upsert_vectors_with_metadata(
                 vectors=vectors,
                 chunk_ids=chunk_ids,
-                document_id=str(document.id),
+                document_id=document_id,
                 filename=filename,
+                organization_id=organization_id,
+                group_id=group_id,
+                owner_id=owner_id,
             )
 
-            return rs.UploadResponse(
-                document_id=str(document.id),
+            self.logger.info(
+                f"[KnowledgeBaseService] ✅ Document processed successfully: "
+                f"doc_id={document_id}, chunks={count}"
+            )
+
+            return rs.ProcessDocumentResponse(
+                document_id=document_id,
                 status="success",
                 chunks_count=count,
                 message=f"Successfully processed and indexed {count} chunks.",
             )
 
         except Exception as e:
-            self.logger.error(f"❌ Upload Critical Error: {e}")
-            return rs.UploadResponse(status="error", message=str(e))
-
-        finally:
-            # Cleanup temp file
-            if temp_file and not temp_file.closed:
-                temp_file.close()
-            if temp_file_path and Path(temp_file_path).exists():
-                await asyncio.to_thread(Path(temp_file_path).unlink)
-                self.logger.info(f"[KnowledgeBaseService] Cleaned up temp file: {temp_file_path}")
+            self.logger.error(f"❌ ProcessDocument Critical Error: {e}")
+            return rs.ProcessDocumentResponse(
+                document_id=document_id,
+                status="error",
+                chunks_count=0,
+                message=str(e),
+            )
 
     async def DeleteDocument(
         self,
         request: rs.DeleteDocumentRequest,
         context: grpc.aio.ServicerContext,
     ) -> rs.DeleteDocumentResponse:
-        """Delete a document from the knowledge base."""
-        # Extract user_id from gRPC metadata headers
-        user_id = get_user_id_from_context(context)
-        if user_id is None:
-            self.logger.error("[KnowledgeBaseService] ❌ User ID not found in gRPC metadata")
-            return rs.DeleteDocumentResponse(
-                status="error", message="Unauthorized: User ID not provided."
-            )
+        """
+        Delete a document's vectors and chunks from the knowledge base.
 
+        Note: Go handles permission checks before calling this.
+        Python just deletes the vectors and chunks for the given document_id.
+        """
         document_id = request.document_id
         self.logger.info(
-            f"[KnowledgeBaseService] DeleteDocument request for document {document_id} by user {user_id}"
+            f"[KnowledgeBaseService] DeleteDocument request for document {document_id}"
         )
 
         try:
-            # Delete document from database (this handles user unlinking and shared document logic)
-            should_delete_vectors = await self.document_service.delete_document_for_user(
-                user_id, document_id
+            # 1) Delete vectors from Qdrant
+            await self.vector_store.delete_by_document_id(document_id)
+            self.logger.info(
+                f"[KnowledgeBaseService] ✅ Deleted vectors for document {document_id}"
             )
 
-            # If no other users are linked to this document, delete vectors from vector store
-            if should_delete_vectors:
-                await self.vector_store.delete_by_document_id(document_id)
-                self.logger.info(
-                    f"[KnowledgeBaseService] ✅ Document {document_id} fully deleted (including vectors)"
-                )
-            else:
-                self.logger.info(
-                    f"[KnowledgeBaseService] ✅ Document {document_id} unlinked from user {user_id}"
-                )
+            # 2) Delete chunks from PostgreSQL (optional - Go may handle this)
+            # For now, we keep chunks in case Go needs them for other purposes
+            # await self.document_service.delete_chunks_by_document_id(document_id)
 
             return rs.DeleteDocumentResponse(
                 status="success",
-                message=f"Document {document_id} successfully deleted.",
+                message=f"Document {document_id} vectors deleted from vector store.",
             )
 
         except Exception as e:
             self.logger.error(f"❌ Delete Document Error: {e}")
             return rs.DeleteDocumentResponse(status="error", message=str(e))
-
-    async def ListDocuments(
-        self,
-        request: rs.ListDocumentsRequest,
-        context: grpc.aio.ServicerContext,
-    ) -> rs.ListDocumentsResponse:
-        """List all documents for the authenticated user."""
-        # Extract user_id from gRPC metadata headers
-        user_id = get_user_id_from_context(context)
-        if user_id is None:
-            self.logger.error("[KnowledgeBaseService] ❌ User ID not found in gRPC metadata")
-            return rs.ListDocumentsResponse(documents=[])
-
-        self.logger.info(f"[KnowledgeBaseService] ListDocuments request for user {user_id}")
-
-        try:
-            # Get documents for the user from the database
-            documents = await self.document_service.list_user_documents(user_id)
-
-            # Convert to protobuf response
-            document_infos = []
-            for doc in documents:
-                created_ts = 0
-                if doc.created_at is not None:
-                    created_ts = int(doc.created_at.timestamp())
-                document_infos.append(
-                    rs.DocumentInfo(
-                        document_id=str(doc.id),
-                        filename=str(doc.filename),
-                        upload_timestamp=created_ts,
-                        chunks_count=int(doc.chunk_count or 0),  # type: ignore[arg-type]
-                    )
-                )
-
-            self.logger.info(
-                f"[KnowledgeBaseService] ✅ Found {len(document_infos)} documents for user {user_id}"
-            )
-
-            return rs.ListDocumentsResponse(documents=document_infos)
-
-        except Exception as e:
-            self.logger.error(f"❌ List Documents Error: {e}")
-            return rs.ListDocumentsResponse(documents=[])

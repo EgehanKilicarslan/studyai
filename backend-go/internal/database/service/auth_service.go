@@ -17,7 +17,7 @@ import (
 
 // AuthService defines the interface for authentication business logic
 type AuthService interface {
-	Register(email, password string) (*models.User, *TokenPair, error)
+	Register(username, email, fullName, password string) (*models.User, *TokenPair, error)
 	Login(email, password string) (*models.User, *TokenPair, error)
 	RefreshToken(refreshToken string) (*TokenPair, error)
 	Logout(refreshToken string) error
@@ -55,10 +55,10 @@ func NewAuthService(
 	}
 }
 
-func (s *authService) Register(email, password string) (*models.User, *TokenPair, error) {
-	s.logger.Info("📝 [AuthService] Registration attempt", "email", email)
+func (s *authService) Register(username, email, fullName, password string) (*models.User, *TokenPair, error) {
+	s.logger.Info("📝 [AuthService] Registration attempt", "email", email, "username", username)
 
-	// Check if user already exists
+	// Check if email already exists
 	existingUser, err := s.userRepo.FindByEmail(email)
 	if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
 		s.logger.Error("❌ [AuthService] Database error", "error", err)
@@ -70,6 +70,18 @@ func (s *authService) Register(email, password string) (*models.User, *TokenPair
 		return nil, nil, ErrEmailAlreadyExists
 	}
 
+	// Check if username already exists
+	existingUser, err = s.userRepo.FindByUsername(username)
+	if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+		s.logger.Error("❌ [AuthService] Database error checking username", "error", err)
+		return nil, nil, err
+	}
+
+	if existingUser != nil {
+		s.logger.Warn("⚠️ [AuthService] Username already taken", "username", username)
+		return nil, nil, errors.New("username already taken")
+	}
+
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -79,7 +91,9 @@ func (s *authService) Register(email, password string) (*models.User, *TokenPair
 
 	// Create user
 	user := &models.User{
+		Username: username,
 		Email:    email,
+		FullName: fullName,
 		Password: string(hashedPassword),
 	}
 

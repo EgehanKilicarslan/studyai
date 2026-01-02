@@ -19,17 +19,13 @@ service ChatService {
 // Knowledge Base Service Definition
 // --------------------------------------------------------
 service KnowledgeBaseService {
-  /// UploadDocument is an RPC that uploads a document in chunks.
-  /// It takes a stream of UploadRequest messages and returns an UploadResponse.
-  rpc UploadDocument (stream UploadRequest) returns (UploadResponse);
+  /// ProcessDocument is an RPC that processes a document that was already saved by Go.
+  /// Go provides the document_id, file_path, and metadata. Python processes and indexes it.
+  rpc ProcessDocument (ProcessDocumentRequest) returns (ProcessDocumentResponse);
 
-  /// DeleteDocument is an RPC that deletes a specified document.
+  /// DeleteDocument is an RPC that deletes a specified document from the vector store.
   /// It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
   rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
-  
-  /// ListDocuments is an RPC that lists all documents in the knowledge base.
-  /// It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
-  rpc ListDocuments (ListDocumentsRequest) returns (ListDocumentsResponse);
 }
 
 // --------------------------------------------------------
@@ -59,27 +55,28 @@ message Source {
 }
 
 // --------------------------------------------------------
-// Upload Message Definitions
+// Process Document Message Definitions (Go -> Python)
 // --------------------------------------------------------
-message UploadRequest {
-  oneof data {
-    UploadMetadata metadata = 1; // Metadata about the file
-    bytes          chunk    = 2; // Chunk of file data
-  }
+message ProcessDocumentRequest {
+  string document_id     = 1; // UUID assigned by Go (source of truth)
+  string file_path       = 2; // Path to the file on disk
+  string filename        = 3; // Original filename
+  string content_type    = 4; // MIME type of the file
+  uint32 organization_id = 5; // Organization ID for multi-tenancy
+  uint32 group_id        = 6; // Group ID (0 if org-wide)
+  uint32 owner_id        = 7; // Owner user ID
 }
 
-message UploadMetadata {
-  string filename     = 1; // Name of the file
-  string content_type = 2 ; // MIME type of the file (e.g., application/pdf)
+message ProcessDocumentResponse {
+  string document_id  = 1; // Echo back the document ID
+  string status       = 2; // "success", "error"
+  int32  chunks_count = 3; // Number of chunks created
+  string message      = 4; // Additional info or error message
 }
 
-message UploadResponse {
-  string document_id  = 1; // Unique identifier for the uploaded document
-  string status       = 2; // Status message
-  int32  chunks_count = 3; // Number of chunks created from the file
-  string message      = 4; // Additional information or error message
-}
-
+// --------------------------------------------------------
+// Delete Document Message Definitions
+// --------------------------------------------------------
 message DeleteDocumentRequest {
   string document_id = 1; // Unique identifier for the document to be deleted
 }
@@ -87,21 +84,4 @@ message DeleteDocumentRequest {
 message DeleteDocumentResponse {
   string status  = 1; // Status message
   string message = 2; // Additional information or error message
-}
-
-message ListDocumentsRequest {
-  int32 page_size = 1; // Number of documents to return per page
-  string page_token = 2; // Token for pagination
-}
-
-message ListDocumentsResponse {
-  repeated DocumentInfo documents = 1; // List of document information
-  string next_page_token = 2; // Token for the next page
-}
-
-message DocumentInfo {
-  string document_id = 1; // Unique identifier for the document
-  string filename    = 2; // Name of the document
-  int64 upload_timestamp = 3; // Upload timestamp
-  int32 chunks_count = 4; // Number of chunks in the document
 }

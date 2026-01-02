@@ -138,9 +138,8 @@ var ChatService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	KnowledgeBaseService_UploadDocument_FullMethodName = "/rag.KnowledgeBaseService/UploadDocument"
-	KnowledgeBaseService_DeleteDocument_FullMethodName = "/rag.KnowledgeBaseService/DeleteDocument"
-	KnowledgeBaseService_ListDocuments_FullMethodName  = "/rag.KnowledgeBaseService/ListDocuments"
+	KnowledgeBaseService_ProcessDocument_FullMethodName = "/rag.KnowledgeBaseService/ProcessDocument"
+	KnowledgeBaseService_DeleteDocument_FullMethodName  = "/rag.KnowledgeBaseService/DeleteDocument"
 )
 
 // KnowledgeBaseServiceClient is the client API for KnowledgeBaseService service.
@@ -151,15 +150,12 @@ const (
 // Knowledge Base Service Definition
 // --------------------------------------------------------
 type KnowledgeBaseServiceClient interface {
-	// / UploadDocument is an RPC that uploads a document in chunks.
-	// / It takes a stream of UploadRequest messages and returns an UploadResponse.
-	UploadDocument(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadRequest, UploadResponse], error)
-	// / DeleteDocument is an RPC that deletes a specified document.
+	// / ProcessDocument is an RPC that processes a document that was already saved by Go.
+	// / Go provides the document_id, file_path, and metadata. Python processes and indexes it.
+	ProcessDocument(ctx context.Context, in *ProcessDocumentRequest, opts ...grpc.CallOption) (*ProcessDocumentResponse, error)
+	// / DeleteDocument is an RPC that deletes a specified document from the vector store.
 	// / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
 	DeleteDocument(ctx context.Context, in *DeleteDocumentRequest, opts ...grpc.CallOption) (*DeleteDocumentResponse, error)
-	// / ListDocuments is an RPC that lists all documents in the knowledge base.
-	// / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
-	ListDocuments(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*ListDocumentsResponse, error)
 }
 
 type knowledgeBaseServiceClient struct {
@@ -170,33 +166,20 @@ func NewKnowledgeBaseServiceClient(cc grpc.ClientConnInterface) KnowledgeBaseSer
 	return &knowledgeBaseServiceClient{cc}
 }
 
-func (c *knowledgeBaseServiceClient) UploadDocument(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadRequest, UploadResponse], error) {
+func (c *knowledgeBaseServiceClient) ProcessDocument(ctx context.Context, in *ProcessDocumentRequest, opts ...grpc.CallOption) (*ProcessDocumentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &KnowledgeBaseService_ServiceDesc.Streams[0], KnowledgeBaseService_UploadDocument_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[UploadRequest, UploadResponse]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type KnowledgeBaseService_UploadDocumentClient = grpc.ClientStreamingClient[UploadRequest, UploadResponse]
-
-func (c *knowledgeBaseServiceClient) DeleteDocument(ctx context.Context, in *DeleteDocumentRequest, opts ...grpc.CallOption) (*DeleteDocumentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteDocumentResponse)
-	err := c.cc.Invoke(ctx, KnowledgeBaseService_DeleteDocument_FullMethodName, in, out, cOpts...)
+	out := new(ProcessDocumentResponse)
+	err := c.cc.Invoke(ctx, KnowledgeBaseService_ProcessDocument_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *knowledgeBaseServiceClient) ListDocuments(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*ListDocumentsResponse, error) {
+func (c *knowledgeBaseServiceClient) DeleteDocument(ctx context.Context, in *DeleteDocumentRequest, opts ...grpc.CallOption) (*DeleteDocumentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListDocumentsResponse)
-	err := c.cc.Invoke(ctx, KnowledgeBaseService_ListDocuments_FullMethodName, in, out, cOpts...)
+	out := new(DeleteDocumentResponse)
+	err := c.cc.Invoke(ctx, KnowledgeBaseService_DeleteDocument_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -211,15 +194,12 @@ func (c *knowledgeBaseServiceClient) ListDocuments(ctx context.Context, in *List
 // Knowledge Base Service Definition
 // --------------------------------------------------------
 type KnowledgeBaseServiceServer interface {
-	// / UploadDocument is an RPC that uploads a document in chunks.
-	// / It takes a stream of UploadRequest messages and returns an UploadResponse.
-	UploadDocument(grpc.ClientStreamingServer[UploadRequest, UploadResponse]) error
-	// / DeleteDocument is an RPC that deletes a specified document.
+	// / ProcessDocument is an RPC that processes a document that was already saved by Go.
+	// / Go provides the document_id, file_path, and metadata. Python processes and indexes it.
+	ProcessDocument(context.Context, *ProcessDocumentRequest) (*ProcessDocumentResponse, error)
+	// / DeleteDocument is an RPC that deletes a specified document from the vector store.
 	// / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
 	DeleteDocument(context.Context, *DeleteDocumentRequest) (*DeleteDocumentResponse, error)
-	// / ListDocuments is an RPC that lists all documents in the knowledge base.
-	// / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
-	ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error)
 	mustEmbedUnimplementedKnowledgeBaseServiceServer()
 }
 
@@ -230,14 +210,11 @@ type KnowledgeBaseServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedKnowledgeBaseServiceServer struct{}
 
-func (UnimplementedKnowledgeBaseServiceServer) UploadDocument(grpc.ClientStreamingServer[UploadRequest, UploadResponse]) error {
-	return status.Error(codes.Unimplemented, "method UploadDocument not implemented")
+func (UnimplementedKnowledgeBaseServiceServer) ProcessDocument(context.Context, *ProcessDocumentRequest) (*ProcessDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProcessDocument not implemented")
 }
 func (UnimplementedKnowledgeBaseServiceServer) DeleteDocument(context.Context, *DeleteDocumentRequest) (*DeleteDocumentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteDocument not implemented")
-}
-func (UnimplementedKnowledgeBaseServiceServer) ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListDocuments not implemented")
 }
 func (UnimplementedKnowledgeBaseServiceServer) mustEmbedUnimplementedKnowledgeBaseServiceServer() {}
 func (UnimplementedKnowledgeBaseServiceServer) testEmbeddedByValue()                              {}
@@ -260,12 +237,23 @@ func RegisterKnowledgeBaseServiceServer(s grpc.ServiceRegistrar, srv KnowledgeBa
 	s.RegisterService(&KnowledgeBaseService_ServiceDesc, srv)
 }
 
-func _KnowledgeBaseService_UploadDocument_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(KnowledgeBaseServiceServer).UploadDocument(&grpc.GenericServerStream[UploadRequest, UploadResponse]{ServerStream: stream})
+func _KnowledgeBaseService_ProcessDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProcessDocumentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KnowledgeBaseServiceServer).ProcessDocument(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KnowledgeBaseService_ProcessDocument_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KnowledgeBaseServiceServer).ProcessDocument(ctx, req.(*ProcessDocumentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type KnowledgeBaseService_UploadDocumentServer = grpc.ClientStreamingServer[UploadRequest, UploadResponse]
 
 func _KnowledgeBaseService_DeleteDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteDocumentRequest)
@@ -285,24 +273,6 @@ func _KnowledgeBaseService_DeleteDocument_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KnowledgeBaseService_ListDocuments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListDocumentsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KnowledgeBaseServiceServer).ListDocuments(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: KnowledgeBaseService_ListDocuments_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KnowledgeBaseServiceServer).ListDocuments(ctx, req.(*ListDocumentsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // KnowledgeBaseService_ServiceDesc is the grpc.ServiceDesc for KnowledgeBaseService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -311,20 +281,14 @@ var KnowledgeBaseService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*KnowledgeBaseServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ProcessDocument",
+			Handler:    _KnowledgeBaseService_ProcessDocument_Handler,
+		},
+		{
 			MethodName: "DeleteDocument",
 			Handler:    _KnowledgeBaseService_DeleteDocument_Handler,
 		},
-		{
-			MethodName: "ListDocuments",
-			Handler:    _KnowledgeBaseService_ListDocuments_Handler,
-		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "UploadDocument",
-			Handler:       _KnowledgeBaseService_UploadDocument_Handler,
-			ClientStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "rag_service.proto",
 }

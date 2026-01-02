@@ -39,10 +39,19 @@ target_metadata = Base.metadata
 # ... etc.
 
 IGNORED_TABLES = {
+    # Go-managed tables (source of truth) - DO NOT generate migrations for these
     "users",
     "refresh_tokens",
+    "organizations",
+    "organization_members",
+    "organization_roles",
+    "groups",
+    "group_roles",
+    "group_members",
+    "documents",
+    # Migration tool tables
     "goose_db_version",  # Go migration tool table
-    "schema_migrations",  # Alternate migration tool table
+    "alembic_version",  # Python migration tool table
 }
 
 

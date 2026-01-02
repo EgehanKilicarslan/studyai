@@ -1,7 +1,7 @@
 from config import settings
 from database import Database
-from database.repositories import DocumentChunkRepository, DocumentRepository
-from database.service import DocumentService
+from database.repositories import DocumentChunkRepository
+from database.service import ChunkService
 from dependency_injector import containers, providers
 from llm import get_llm_provider
 from logger import AppLogger
@@ -18,13 +18,10 @@ class Container(containers.DeclarativeContainer):
 
     database = providers.Singleton(Database, settings=config, logger=app_logger)
 
-    documents_repository = providers.Factory(DocumentRepository, db=database)
-
     chunks_repository = providers.Factory(DocumentChunkRepository, db=database)
 
-    document_service = providers.Factory(
-        DocumentService,
-        repo=documents_repository,
+    chunk_service = providers.Factory(
+        ChunkService,
         chunk_repo=chunks_repository,
         logger=app_logger,
     )
@@ -48,7 +45,7 @@ class Container(containers.DeclarativeContainer):
         vector_store=vector_store,
         embedder=embedding_generator,
         reranker=reranker_service,
-        document_service=document_service,
+        chunk_service=chunk_service,
     )
 
     knowledge_base_service = providers.Factory(
@@ -58,5 +55,5 @@ class Container(containers.DeclarativeContainer):
         vector_store=vector_store,
         embedder=embedding_generator,
         parser=document_parser,
-        document_service=document_service,
+        chunk_service=chunk_service,
     )

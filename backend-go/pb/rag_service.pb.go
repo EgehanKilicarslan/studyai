@@ -216,33 +216,35 @@ func (x *Source) GetScore() float32 {
 }
 
 // --------------------------------------------------------
-// Upload Message Definitions
+// Process Document Message Definitions (Go -> Python)
 // --------------------------------------------------------
-type UploadRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Data:
-	//
-	//	*UploadRequest_Metadata
-	//	*UploadRequest_Chunk
-	Data          isUploadRequest_Data `protobuf_oneof:"data"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+type ProcessDocumentRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`              // UUID assigned by Go (source of truth)
+	FilePath       string                 `protobuf:"bytes,2,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`                    // Path to the file on disk
+	Filename       string                 `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`                                    // Original filename
+	ContentType    string                 `protobuf:"bytes,4,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`           // MIME type of the file
+	OrganizationId uint32                 `protobuf:"varint,5,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"` // Organization ID for multi-tenancy
+	GroupId        uint32                 `protobuf:"varint,6,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`                      // Group ID (0 if org-wide)
+	OwnerId        uint32                 `protobuf:"varint,7,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`                      // Owner user ID
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
-func (x *UploadRequest) Reset() {
-	*x = UploadRequest{}
+func (x *ProcessDocumentRequest) Reset() {
+	*x = ProcessDocumentRequest{}
 	mi := &file_rag_service_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *UploadRequest) String() string {
+func (x *ProcessDocumentRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UploadRequest) ProtoMessage() {}
+func (*ProcessDocumentRequest) ProtoMessage() {}
 
-func (x *UploadRequest) ProtoReflect() protoreflect.Message {
+func (x *ProcessDocumentRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_rag_service_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -254,172 +256,131 @@ func (x *UploadRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UploadRequest.ProtoReflect.Descriptor instead.
-func (*UploadRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ProcessDocumentRequest.ProtoReflect.Descriptor instead.
+func (*ProcessDocumentRequest) Descriptor() ([]byte, []int) {
 	return file_rag_service_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *UploadRequest) GetData() isUploadRequest_Data {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-func (x *UploadRequest) GetMetadata() *UploadMetadata {
-	if x != nil {
-		if x, ok := x.Data.(*UploadRequest_Metadata); ok {
-			return x.Metadata
-		}
-	}
-	return nil
-}
-
-func (x *UploadRequest) GetChunk() []byte {
-	if x != nil {
-		if x, ok := x.Data.(*UploadRequest_Chunk); ok {
-			return x.Chunk
-		}
-	}
-	return nil
-}
-
-type isUploadRequest_Data interface {
-	isUploadRequest_Data()
-}
-
-type UploadRequest_Metadata struct {
-	Metadata *UploadMetadata `protobuf:"bytes,1,opt,name=metadata,proto3,oneof"` // Metadata about the file
-}
-
-type UploadRequest_Chunk struct {
-	Chunk []byte `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"` // Chunk of file data
-}
-
-func (*UploadRequest_Metadata) isUploadRequest_Data() {}
-
-func (*UploadRequest_Chunk) isUploadRequest_Data() {}
-
-type UploadMetadata struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Filename      string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`                          // Name of the file
-	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"` // MIME type of the file (e.g., application/pdf)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UploadMetadata) Reset() {
-	*x = UploadMetadata{}
-	mi := &file_rag_service_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UploadMetadata) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UploadMetadata) ProtoMessage() {}
-
-func (x *UploadMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_rag_service_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UploadMetadata.ProtoReflect.Descriptor instead.
-func (*UploadMetadata) Descriptor() ([]byte, []int) {
-	return file_rag_service_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *UploadMetadata) GetFilename() string {
-	if x != nil {
-		return x.Filename
-	}
-	return ""
-}
-
-func (x *UploadMetadata) GetContentType() string {
-	if x != nil {
-		return x.ContentType
-	}
-	return ""
-}
-
-type UploadResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId    string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`     // Unique identifier for the uploaded document
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`                               // Status message
-	ChunksCount   int32                  `protobuf:"varint,3,opt,name=chunks_count,json=chunksCount,proto3" json:"chunks_count,omitempty"` // Number of chunks created from the file
-	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`                             // Additional information or error message
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UploadResponse) Reset() {
-	*x = UploadResponse{}
-	mi := &file_rag_service_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UploadResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UploadResponse) ProtoMessage() {}
-
-func (x *UploadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rag_service_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UploadResponse.ProtoReflect.Descriptor instead.
-func (*UploadResponse) Descriptor() ([]byte, []int) {
-	return file_rag_service_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *UploadResponse) GetDocumentId() string {
+func (x *ProcessDocumentRequest) GetDocumentId() string {
 	if x != nil {
 		return x.DocumentId
 	}
 	return ""
 }
 
-func (x *UploadResponse) GetStatus() string {
+func (x *ProcessDocumentRequest) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
+}
+
+func (x *ProcessDocumentRequest) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *ProcessDocumentRequest) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *ProcessDocumentRequest) GetOrganizationId() uint32 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
+}
+
+func (x *ProcessDocumentRequest) GetGroupId() uint32 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
+func (x *ProcessDocumentRequest) GetOwnerId() uint32 {
+	if x != nil {
+		return x.OwnerId
+	}
+	return 0
+}
+
+type ProcessDocumentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DocumentId    string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`     // Echo back the document ID
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`                               // "success", "error"
+	ChunksCount   int32                  `protobuf:"varint,3,opt,name=chunks_count,json=chunksCount,proto3" json:"chunks_count,omitempty"` // Number of chunks created
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`                             // Additional info or error message
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessDocumentResponse) Reset() {
+	*x = ProcessDocumentResponse{}
+	mi := &file_rag_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessDocumentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessDocumentResponse) ProtoMessage() {}
+
+func (x *ProcessDocumentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rag_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessDocumentResponse.ProtoReflect.Descriptor instead.
+func (*ProcessDocumentResponse) Descriptor() ([]byte, []int) {
+	return file_rag_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ProcessDocumentResponse) GetDocumentId() string {
+	if x != nil {
+		return x.DocumentId
+	}
+	return ""
+}
+
+func (x *ProcessDocumentResponse) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *UploadResponse) GetChunksCount() int32 {
+func (x *ProcessDocumentResponse) GetChunksCount() int32 {
 	if x != nil {
 		return x.ChunksCount
 	}
 	return 0
 }
 
-func (x *UploadResponse) GetMessage() string {
+func (x *ProcessDocumentResponse) GetMessage() string {
 	if x != nil {
 		return x.Message
 	}
 	return ""
 }
 
+// --------------------------------------------------------
+// Delete Document Message Definitions
+// --------------------------------------------------------
 type DeleteDocumentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DocumentId    string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"` // Unique identifier for the document to be deleted
@@ -429,7 +390,7 @@ type DeleteDocumentRequest struct {
 
 func (x *DeleteDocumentRequest) Reset() {
 	*x = DeleteDocumentRequest{}
-	mi := &file_rag_service_proto_msgTypes[6]
+	mi := &file_rag_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -441,7 +402,7 @@ func (x *DeleteDocumentRequest) String() string {
 func (*DeleteDocumentRequest) ProtoMessage() {}
 
 func (x *DeleteDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rag_service_proto_msgTypes[6]
+	mi := &file_rag_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -454,7 +415,7 @@ func (x *DeleteDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDocumentRequest.ProtoReflect.Descriptor instead.
 func (*DeleteDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_rag_service_proto_rawDescGZIP(), []int{6}
+	return file_rag_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DeleteDocumentRequest) GetDocumentId() string {
@@ -474,7 +435,7 @@ type DeleteDocumentResponse struct {
 
 func (x *DeleteDocumentResponse) Reset() {
 	*x = DeleteDocumentResponse{}
-	mi := &file_rag_service_proto_msgTypes[7]
+	mi := &file_rag_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -486,7 +447,7 @@ func (x *DeleteDocumentResponse) String() string {
 func (*DeleteDocumentResponse) ProtoMessage() {}
 
 func (x *DeleteDocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rag_service_proto_msgTypes[7]
+	mi := &file_rag_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -499,7 +460,7 @@ func (x *DeleteDocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDocumentResponse.ProtoReflect.Descriptor instead.
 func (*DeleteDocumentResponse) Descriptor() ([]byte, []int) {
-	return file_rag_service_proto_rawDescGZIP(), []int{7}
+	return file_rag_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DeleteDocumentResponse) GetStatus() string {
@@ -514,178 +475,6 @@ func (x *DeleteDocumentResponse) GetMessage() string {
 		return x.Message
 	}
 	return ""
-}
-
-type ListDocumentsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`   // Number of documents to return per page
-	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Token for pagination
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListDocumentsRequest) Reset() {
-	*x = ListDocumentsRequest{}
-	mi := &file_rag_service_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListDocumentsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListDocumentsRequest) ProtoMessage() {}
-
-func (x *ListDocumentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_rag_service_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListDocumentsRequest.ProtoReflect.Descriptor instead.
-func (*ListDocumentsRequest) Descriptor() ([]byte, []int) {
-	return file_rag_service_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *ListDocumentsRequest) GetPageSize() int32 {
-	if x != nil {
-		return x.PageSize
-	}
-	return 0
-}
-
-func (x *ListDocumentsRequest) GetPageToken() string {
-	if x != nil {
-		return x.PageToken
-	}
-	return ""
-}
-
-type ListDocumentsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Documents     []*DocumentInfo        `protobuf:"bytes,1,rep,name=documents,proto3" json:"documents,omitempty"`                                // List of document information
-	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"` // Token for the next page
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListDocumentsResponse) Reset() {
-	*x = ListDocumentsResponse{}
-	mi := &file_rag_service_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListDocumentsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListDocumentsResponse) ProtoMessage() {}
-
-func (x *ListDocumentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_rag_service_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListDocumentsResponse.ProtoReflect.Descriptor instead.
-func (*ListDocumentsResponse) Descriptor() ([]byte, []int) {
-	return file_rag_service_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *ListDocumentsResponse) GetDocuments() []*DocumentInfo {
-	if x != nil {
-		return x.Documents
-	}
-	return nil
-}
-
-func (x *ListDocumentsResponse) GetNextPageToken() string {
-	if x != nil {
-		return x.NextPageToken
-	}
-	return ""
-}
-
-type DocumentInfo struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId      string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`                 // Unique identifier for the document
-	Filename        string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`                                       // Name of the document
-	UploadTimestamp int64                  `protobuf:"varint,3,opt,name=upload_timestamp,json=uploadTimestamp,proto3" json:"upload_timestamp,omitempty"` // Upload timestamp
-	ChunksCount     int32                  `protobuf:"varint,4,opt,name=chunks_count,json=chunksCount,proto3" json:"chunks_count,omitempty"`             // Number of chunks in the document
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *DocumentInfo) Reset() {
-	*x = DocumentInfo{}
-	mi := &file_rag_service_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DocumentInfo) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DocumentInfo) ProtoMessage() {}
-
-func (x *DocumentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_rag_service_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DocumentInfo.ProtoReflect.Descriptor instead.
-func (*DocumentInfo) Descriptor() ([]byte, []int) {
-	return file_rag_service_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *DocumentInfo) GetDocumentId() string {
-	if x != nil {
-		return x.DocumentId
-	}
-	return ""
-}
-
-func (x *DocumentInfo) GetFilename() string {
-	if x != nil {
-		return x.Filename
-	}
-	return ""
-}
-
-func (x *DocumentInfo) GetUploadTimestamp() int64 {
-	if x != nil {
-		return x.UploadTimestamp
-	}
-	return 0
-}
-
-func (x *DocumentInfo) GetChunksCount() int32 {
-	if x != nil {
-		return x.ChunksCount
-	}
-	return 0
 }
 
 var File_rag_service_proto protoreflect.FileDescriptor
@@ -708,15 +497,17 @@ const file_rag_service_proto_rawDesc = "" +
 	"\vpage_number\x18\x03 \x01(\x05R\n" +
 	"pageNumber\x12\x18\n" +
 	"\asnippet\x18\x04 \x01(\tR\asnippet\x12\x14\n" +
-	"\x05score\x18\x05 \x01(\x02R\x05score\"b\n" +
-	"\rUploadRequest\x121\n" +
-	"\bmetadata\x18\x01 \x01(\v2\x13.rag.UploadMetadataH\x00R\bmetadata\x12\x16\n" +
-	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunkB\x06\n" +
-	"\x04data\"O\n" +
-	"\x0eUploadMetadata\x12\x1a\n" +
-	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
-	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"\x86\x01\n" +
-	"\x0eUploadResponse\x12\x1f\n" +
+	"\x05score\x18\x05 \x01(\x02R\x05score\"\xf4\x01\n" +
+	"\x16ProcessDocumentRequest\x12\x1f\n" +
+	"\vdocument_id\x18\x01 \x01(\tR\n" +
+	"documentId\x12\x1b\n" +
+	"\tfile_path\x18\x02 \x01(\tR\bfilePath\x12\x1a\n" +
+	"\bfilename\x18\x03 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x04 \x01(\tR\vcontentType\x12'\n" +
+	"\x0forganization_id\x18\x05 \x01(\rR\x0eorganizationId\x12\x19\n" +
+	"\bgroup_id\x18\x06 \x01(\rR\agroupId\x12\x19\n" +
+	"\bowner_id\x18\a \x01(\rR\aownerId\"\x8f\x01\n" +
+	"\x17ProcessDocumentResponse\x12\x1f\n" +
 	"\vdocument_id\x18\x01 \x01(\tR\n" +
 	"documentId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12!\n" +
@@ -727,26 +518,12 @@ const file_rag_service_proto_rawDesc = "" +
 	"documentId\"J\n" +
 	"\x16DeleteDocumentResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"R\n" +
-	"\x14ListDocumentsRequest\x12\x1b\n" +
-	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
-	"\n" +
-	"page_token\x18\x02 \x01(\tR\tpageToken\"p\n" +
-	"\x15ListDocumentsResponse\x12/\n" +
-	"\tdocuments\x18\x01 \x03(\v2\x11.rag.DocumentInfoR\tdocuments\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x99\x01\n" +
-	"\fDocumentInfo\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12\x1a\n" +
-	"\bfilename\x18\x02 \x01(\tR\bfilename\x12)\n" +
-	"\x10upload_timestamp\x18\x03 \x01(\x03R\x0fuploadTimestamp\x12!\n" +
-	"\fchunks_count\x18\x04 \x01(\x05R\vchunksCount2<\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2<\n" +
 	"\vChatService\x12-\n" +
-	"\x04Chat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x012\xe6\x01\n" +
-	"\x14KnowledgeBaseService\x12;\n" +
-	"\x0eUploadDocument\x12\x12.rag.UploadRequest\x1a\x13.rag.UploadResponse(\x01\x12I\n" +
-	"\x0eDeleteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponse\x12F\n" +
-	"\rListDocuments\x12\x19.rag.ListDocumentsRequest\x1a\x1a.rag.ListDocumentsResponseB\x06Z\x04./pbb\x06proto3"
+	"\x04Chat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x012\xaf\x01\n" +
+	"\x14KnowledgeBaseService\x12L\n" +
+	"\x0fProcessDocument\x12\x1b.rag.ProcessDocumentRequest\x1a\x1c.rag.ProcessDocumentResponse\x12I\n" +
+	"\x0eDeleteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponseB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_rag_service_proto_rawDescOnce sync.Once
@@ -760,37 +537,29 @@ func file_rag_service_proto_rawDescGZIP() []byte {
 	return file_rag_service_proto_rawDescData
 }
 
-var file_rag_service_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_rag_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_rag_service_proto_goTypes = []any{
-	(*ChatRequest)(nil),            // 0: rag.ChatRequest
-	(*ChatResponse)(nil),           // 1: rag.ChatResponse
-	(*Source)(nil),                 // 2: rag.Source
-	(*UploadRequest)(nil),          // 3: rag.UploadRequest
-	(*UploadMetadata)(nil),         // 4: rag.UploadMetadata
-	(*UploadResponse)(nil),         // 5: rag.UploadResponse
-	(*DeleteDocumentRequest)(nil),  // 6: rag.DeleteDocumentRequest
-	(*DeleteDocumentResponse)(nil), // 7: rag.DeleteDocumentResponse
-	(*ListDocumentsRequest)(nil),   // 8: rag.ListDocumentsRequest
-	(*ListDocumentsResponse)(nil),  // 9: rag.ListDocumentsResponse
-	(*DocumentInfo)(nil),           // 10: rag.DocumentInfo
+	(*ChatRequest)(nil),             // 0: rag.ChatRequest
+	(*ChatResponse)(nil),            // 1: rag.ChatResponse
+	(*Source)(nil),                  // 2: rag.Source
+	(*ProcessDocumentRequest)(nil),  // 3: rag.ProcessDocumentRequest
+	(*ProcessDocumentResponse)(nil), // 4: rag.ProcessDocumentResponse
+	(*DeleteDocumentRequest)(nil),   // 5: rag.DeleteDocumentRequest
+	(*DeleteDocumentResponse)(nil),  // 6: rag.DeleteDocumentResponse
 }
 var file_rag_service_proto_depIdxs = []int32{
-	2,  // 0: rag.ChatResponse.source_documents:type_name -> rag.Source
-	4,  // 1: rag.UploadRequest.metadata:type_name -> rag.UploadMetadata
-	10, // 2: rag.ListDocumentsResponse.documents:type_name -> rag.DocumentInfo
-	0,  // 3: rag.ChatService.Chat:input_type -> rag.ChatRequest
-	3,  // 4: rag.KnowledgeBaseService.UploadDocument:input_type -> rag.UploadRequest
-	6,  // 5: rag.KnowledgeBaseService.DeleteDocument:input_type -> rag.DeleteDocumentRequest
-	8,  // 6: rag.KnowledgeBaseService.ListDocuments:input_type -> rag.ListDocumentsRequest
-	1,  // 7: rag.ChatService.Chat:output_type -> rag.ChatResponse
-	5,  // 8: rag.KnowledgeBaseService.UploadDocument:output_type -> rag.UploadResponse
-	7,  // 9: rag.KnowledgeBaseService.DeleteDocument:output_type -> rag.DeleteDocumentResponse
-	9,  // 10: rag.KnowledgeBaseService.ListDocuments:output_type -> rag.ListDocumentsResponse
-	7,  // [7:11] is the sub-list for method output_type
-	3,  // [3:7] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	2, // 0: rag.ChatResponse.source_documents:type_name -> rag.Source
+	0, // 1: rag.ChatService.Chat:input_type -> rag.ChatRequest
+	3, // 2: rag.KnowledgeBaseService.ProcessDocument:input_type -> rag.ProcessDocumentRequest
+	5, // 3: rag.KnowledgeBaseService.DeleteDocument:input_type -> rag.DeleteDocumentRequest
+	1, // 4: rag.ChatService.Chat:output_type -> rag.ChatResponse
+	4, // 5: rag.KnowledgeBaseService.ProcessDocument:output_type -> rag.ProcessDocumentResponse
+	6, // 6: rag.KnowledgeBaseService.DeleteDocument:output_type -> rag.DeleteDocumentResponse
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_rag_service_proto_init() }
@@ -798,17 +567,13 @@ func file_rag_service_proto_init() {
 	if File_rag_service_proto != nil {
 		return
 	}
-	file_rag_service_proto_msgTypes[3].OneofWrappers = []any{
-		(*UploadRequest_Metadata)(nil),
-		(*UploadRequest_Chunk)(nil),
-	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rag_service_proto_rawDesc), len(file_rag_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

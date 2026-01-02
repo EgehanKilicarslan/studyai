@@ -95,19 +95,19 @@ class ChatServiceServicer(metaclass=abc.ABCMeta):
 
 def add_ChatServiceServicer_to_server(servicer: ChatServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...
 
-_KnowledgeBaseServiceUploadDocumentType = typing_extensions.TypeVar(
-    '_KnowledgeBaseServiceUploadDocumentType',
-    grpc.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
+_KnowledgeBaseServiceProcessDocumentType = typing_extensions.TypeVar(
+    '_KnowledgeBaseServiceProcessDocumentType',
+    grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.ProcessDocumentRequest,
+        rag_service_pb2.ProcessDocumentResponse,
     ],
-    grpc.aio.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.ProcessDocumentRequest,
+        rag_service_pb2.ProcessDocumentResponse,
     ],
-    default=grpc.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
+    default=grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.ProcessDocumentRequest,
+        rag_service_pb2.ProcessDocumentResponse,
     ],
 )
 
@@ -127,23 +127,7 @@ _KnowledgeBaseServiceDeleteDocumentType = typing_extensions.TypeVar(
     ],
 )
 
-_KnowledgeBaseServiceListDocumentsType = typing_extensions.TypeVar(
-    '_KnowledgeBaseServiceListDocumentsType',
-    grpc.UnaryUnaryMultiCallable[
-        rag_service_pb2.ListDocumentsRequest,
-        rag_service_pb2.ListDocumentsResponse,
-    ],
-    grpc.aio.UnaryUnaryMultiCallable[
-        rag_service_pb2.ListDocumentsRequest,
-        rag_service_pb2.ListDocumentsResponse,
-    ],
-    default=grpc.UnaryUnaryMultiCallable[
-        rag_service_pb2.ListDocumentsRequest,
-        rag_service_pb2.ListDocumentsResponse,
-    ],
-)
-
-class KnowledgeBaseServiceStub(typing.Generic[_KnowledgeBaseServiceUploadDocumentType, _KnowledgeBaseServiceDeleteDocumentType, _KnowledgeBaseServiceListDocumentsType]):
+class KnowledgeBaseServiceStub(typing.Generic[_KnowledgeBaseServiceProcessDocumentType, _KnowledgeBaseServiceDeleteDocumentType]):
     """--------------------------------------------------------
     Knowledge Base Service Definition
     --------------------------------------------------------
@@ -151,63 +135,46 @@ class KnowledgeBaseServiceStub(typing.Generic[_KnowledgeBaseServiceUploadDocumen
 
     @typing.overload
     def __init__(self: KnowledgeBaseServiceStub[
-        grpc.StreamUnaryMultiCallable[
-            rag_service_pb2.UploadRequest,
-            rag_service_pb2.UploadResponse,
+        grpc.UnaryUnaryMultiCallable[
+            rag_service_pb2.ProcessDocumentRequest,
+            rag_service_pb2.ProcessDocumentResponse,
         ],
         grpc.UnaryUnaryMultiCallable[
             rag_service_pb2.DeleteDocumentRequest,
             rag_service_pb2.DeleteDocumentResponse,
-        ],
-        grpc.UnaryUnaryMultiCallable[
-            rag_service_pb2.ListDocumentsRequest,
-            rag_service_pb2.ListDocumentsResponse,
         ],
     ], channel: grpc.Channel) -> None: ...
 
     @typing.overload
     def __init__(self: KnowledgeBaseServiceStub[
-        grpc.aio.StreamUnaryMultiCallable[
-            rag_service_pb2.UploadRequest,
-            rag_service_pb2.UploadResponse,
+        grpc.aio.UnaryUnaryMultiCallable[
+            rag_service_pb2.ProcessDocumentRequest,
+            rag_service_pb2.ProcessDocumentResponse,
         ],
         grpc.aio.UnaryUnaryMultiCallable[
             rag_service_pb2.DeleteDocumentRequest,
             rag_service_pb2.DeleteDocumentResponse,
         ],
-        grpc.aio.UnaryUnaryMultiCallable[
-            rag_service_pb2.ListDocumentsRequest,
-            rag_service_pb2.ListDocumentsResponse,
-        ],
     ], channel: grpc.aio.Channel) -> None: ...
 
-    UploadDocument: _KnowledgeBaseServiceUploadDocumentType
-    """/ UploadDocument is an RPC that uploads a document in chunks.
-    / It takes a stream of UploadRequest messages and returns an UploadResponse.
+    ProcessDocument: _KnowledgeBaseServiceProcessDocumentType
+    """/ ProcessDocument is an RPC that processes a document that was already saved by Go.
+    / Go provides the document_id, file_path, and metadata. Python processes and indexes it.
     """
 
     DeleteDocument: _KnowledgeBaseServiceDeleteDocumentType
-    """/ DeleteDocument is an RPC that deletes a specified document.
+    """/ DeleteDocument is an RPC that deletes a specified document from the vector store.
     / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
     """
 
-    ListDocuments: _KnowledgeBaseServiceListDocumentsType
-    """/ ListDocuments is an RPC that lists all documents in the knowledge base.
-    / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
-    """
-
 KnowledgeBaseServiceAsyncStub: typing_extensions.TypeAlias = KnowledgeBaseServiceStub[
-    grpc.aio.StreamUnaryMultiCallable[
-        rag_service_pb2.UploadRequest,
-        rag_service_pb2.UploadResponse,
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.ProcessDocumentRequest,
+        rag_service_pb2.ProcessDocumentResponse,
     ],
     grpc.aio.UnaryUnaryMultiCallable[
         rag_service_pb2.DeleteDocumentRequest,
         rag_service_pb2.DeleteDocumentResponse,
-    ],
-    grpc.aio.UnaryUnaryMultiCallable[
-        rag_service_pb2.ListDocumentsRequest,
-        rag_service_pb2.ListDocumentsResponse,
     ],
 ]
 
@@ -218,13 +185,13 @@ class KnowledgeBaseServiceServicer(metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def UploadDocument(
+    def ProcessDocument(
         self,
-        request_iterator: _MaybeAsyncIterator[rag_service_pb2.UploadRequest],
+        request: rag_service_pb2.ProcessDocumentRequest,
         context: _ServicerContext,
-    ) -> typing.Union[rag_service_pb2.UploadResponse, collections.abc.Awaitable[rag_service_pb2.UploadResponse]]:
-        """/ UploadDocument is an RPC that uploads a document in chunks.
-        / It takes a stream of UploadRequest messages and returns an UploadResponse.
+    ) -> typing.Union[rag_service_pb2.ProcessDocumentResponse, collections.abc.Awaitable[rag_service_pb2.ProcessDocumentResponse]]:
+        """/ ProcessDocument is an RPC that processes a document that was already saved by Go.
+        / Go provides the document_id, file_path, and metadata. Python processes and indexes it.
         """
 
     @abc.abstractmethod
@@ -233,18 +200,8 @@ class KnowledgeBaseServiceServicer(metaclass=abc.ABCMeta):
         request: rag_service_pb2.DeleteDocumentRequest,
         context: _ServicerContext,
     ) -> typing.Union[rag_service_pb2.DeleteDocumentResponse, collections.abc.Awaitable[rag_service_pb2.DeleteDocumentResponse]]:
-        """/ DeleteDocument is an RPC that deletes a specified document.
+        """/ DeleteDocument is an RPC that deletes a specified document from the vector store.
         / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
-        """
-
-    @abc.abstractmethod
-    def ListDocuments(
-        self,
-        request: rag_service_pb2.ListDocumentsRequest,
-        context: _ServicerContext,
-    ) -> typing.Union[rag_service_pb2.ListDocumentsResponse, collections.abc.Awaitable[rag_service_pb2.ListDocumentsResponse]]:
-        """/ ListDocuments is an RPC that lists all documents in the knowledge base.
-        / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
         """
 
 def add_KnowledgeBaseServiceServicer_to_server(servicer: KnowledgeBaseServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...

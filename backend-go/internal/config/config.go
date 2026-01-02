@@ -24,6 +24,10 @@ type Config struct {
 	JWTSecret              string
 	AccessTokenExpiration  int64
 	RefreshTokenExpiration int64
+	RedisHost              string
+	RedisPort              int64
+	RedisPassword          string
+	RedisDB                int64
 }
 
 func LoadConfig() *Config {
@@ -43,6 +47,10 @@ func LoadConfig() *Config {
 		JWTSecret:              getEnv("JWT_SECRET", "studyai_secret"),            // Default secret key
 		AccessTokenExpiration:  getEnvAsInt64("ACCESS_TOKEN_EXPIRATION", 900),     // Default 15 minutes
 		RefreshTokenExpiration: getEnvAsInt64("REFRESH_TOKEN_EXPIRATION", 604800), // Default 7 days
+		RedisHost:              getEnv("REDIS_HOST", "redis"),                     // Default redis
+		RedisPort:              getEnvAsInt64("REDIS_PORT", 6379),                 // Default 6379
+		RedisPassword:          getEnv("REDIS_PASSWORD", ""),                      // Default empty
+		RedisDB:                getEnvAsInt64("REDIS_DB", 0),                      // Default 0
 	}
 }
 

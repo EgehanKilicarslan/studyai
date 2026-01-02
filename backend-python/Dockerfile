@@ -27,19 +27,26 @@ RUN mkdir -p /home/appuser/.cache/huggingface && \
     mkdir -p /home/appuser/.cache/models && \
     chown -R appuser:appgroup /home/appuser/.cache
 
+RUN mkdir -p /tmp/studyai/uploads && \
+    chown -R appuser:appgroup /tmp/studyai/uploads
+
 COPY --from=builder /dist /app/libs
 
 ENV PYTHONPATH="/app/libs:/app:$PYTHONPATH"
 ENV PATH="/app/libs/bin:$PATH"
 ENV HF_HOME="/home/appuser/.cache/huggingface"
 
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 COPY app/ ./app/
 COPY pb/ ./pb/
+COPY alembic.ini alembic.ini
 
 RUN chown -R appuser:appgroup /app
 
-EXPOSE 50051
-
 USER appuser
 
-CMD ["python", "app/main.py"]
+EXPOSE 50051
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

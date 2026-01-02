@@ -107,56 +107,52 @@ class Source(google.protobuf.message.Message):
 Global___Source: typing_extensions.TypeAlias = Source
 
 @typing.final
-class UploadRequest(google.protobuf.message.Message):
+class ProcessDocumentRequest(google.protobuf.message.Message):
     """--------------------------------------------------------
-    Upload Message Definitions
+    Process Document Message Definitions (Go -> Python)
     --------------------------------------------------------
     """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    METADATA_FIELD_NUMBER: builtins.int
-    CHUNK_FIELD_NUMBER: builtins.int
-    chunk: builtins.bytes
-    """Chunk of file data"""
-    @property
-    def metadata(self) -> Global___UploadMetadata:
-        """Metadata about the file"""
-
-    def __init__(
-        self,
-        *,
-        metadata: Global___UploadMetadata | None = ...,
-        chunk: builtins.bytes = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["chunk", b"chunk", "data", b"data", "metadata", b"metadata"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["chunk", b"chunk", "data", b"data", "metadata", b"metadata"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["data", b"data"]) -> typing.Literal["metadata", "chunk"] | None: ...
-
-Global___UploadRequest: typing_extensions.TypeAlias = UploadRequest
-
-@typing.final
-class UploadMetadata(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
+    DOCUMENT_ID_FIELD_NUMBER: builtins.int
+    FILE_PATH_FIELD_NUMBER: builtins.int
     FILENAME_FIELD_NUMBER: builtins.int
     CONTENT_TYPE_FIELD_NUMBER: builtins.int
+    ORGANIZATION_ID_FIELD_NUMBER: builtins.int
+    GROUP_ID_FIELD_NUMBER: builtins.int
+    OWNER_ID_FIELD_NUMBER: builtins.int
+    document_id: builtins.str
+    """UUID assigned by Go (source of truth)"""
+    file_path: builtins.str
+    """Path to the file on disk"""
     filename: builtins.str
-    """Name of the file"""
+    """Original filename"""
     content_type: builtins.str
-    """MIME type of the file (e.g., application/pdf)"""
+    """MIME type of the file"""
+    organization_id: builtins.int
+    """Organization ID for multi-tenancy"""
+    group_id: builtins.int
+    """Group ID (0 if org-wide)"""
+    owner_id: builtins.int
+    """Owner user ID"""
     def __init__(
         self,
         *,
+        document_id: builtins.str = ...,
+        file_path: builtins.str = ...,
         filename: builtins.str = ...,
         content_type: builtins.str = ...,
+        organization_id: builtins.int = ...,
+        group_id: builtins.int = ...,
+        owner_id: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["content_type", b"content_type", "filename", b"filename"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["content_type", b"content_type", "document_id", b"document_id", "file_path", b"file_path", "filename", b"filename", "group_id", b"group_id", "organization_id", b"organization_id", "owner_id", b"owner_id"]) -> None: ...
 
-Global___UploadMetadata: typing_extensions.TypeAlias = UploadMetadata
+Global___ProcessDocumentRequest: typing_extensions.TypeAlias = ProcessDocumentRequest
 
 @typing.final
-class UploadResponse(google.protobuf.message.Message):
+class ProcessDocumentResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     DOCUMENT_ID_FIELD_NUMBER: builtins.int
@@ -164,13 +160,13 @@ class UploadResponse(google.protobuf.message.Message):
     CHUNKS_COUNT_FIELD_NUMBER: builtins.int
     MESSAGE_FIELD_NUMBER: builtins.int
     document_id: builtins.str
-    """Unique identifier for the uploaded document"""
+    """Echo back the document ID"""
     status: builtins.str
-    """Status message"""
+    """"success", "error" """
     chunks_count: builtins.int
-    """Number of chunks created from the file"""
+    """Number of chunks created"""
     message: builtins.str
-    """Additional information or error message"""
+    """Additional info or error message"""
     def __init__(
         self,
         *,
@@ -181,10 +177,15 @@ class UploadResponse(google.protobuf.message.Message):
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["chunks_count", b"chunks_count", "document_id", b"document_id", "message", b"message", "status", b"status"]) -> None: ...
 
-Global___UploadResponse: typing_extensions.TypeAlias = UploadResponse
+Global___ProcessDocumentResponse: typing_extensions.TypeAlias = ProcessDocumentResponse
 
 @typing.final
 class DeleteDocumentRequest(google.protobuf.message.Message):
+    """--------------------------------------------------------
+    Delete Document Message Definitions
+    --------------------------------------------------------
+    """
+
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     DOCUMENT_ID_FIELD_NUMBER: builtins.int
@@ -218,73 +219,3 @@ class DeleteDocumentResponse(google.protobuf.message.Message):
     def ClearField(self, field_name: typing.Literal["message", b"message", "status", b"status"]) -> None: ...
 
 Global___DeleteDocumentResponse: typing_extensions.TypeAlias = DeleteDocumentResponse
-
-@typing.final
-class ListDocumentsRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    PAGE_SIZE_FIELD_NUMBER: builtins.int
-    PAGE_TOKEN_FIELD_NUMBER: builtins.int
-    page_size: builtins.int
-    """Number of documents to return per page"""
-    page_token: builtins.str
-    """Token for pagination"""
-    def __init__(
-        self,
-        *,
-        page_size: builtins.int = ...,
-        page_token: builtins.str = ...,
-    ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["page_size", b"page_size", "page_token", b"page_token"]) -> None: ...
-
-Global___ListDocumentsRequest: typing_extensions.TypeAlias = ListDocumentsRequest
-
-@typing.final
-class ListDocumentsResponse(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    DOCUMENTS_FIELD_NUMBER: builtins.int
-    NEXT_PAGE_TOKEN_FIELD_NUMBER: builtins.int
-    next_page_token: builtins.str
-    """Token for the next page"""
-    @property
-    def documents(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___DocumentInfo]:
-        """List of document information"""
-
-    def __init__(
-        self,
-        *,
-        documents: collections.abc.Iterable[Global___DocumentInfo] | None = ...,
-        next_page_token: builtins.str = ...,
-    ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["documents", b"documents", "next_page_token", b"next_page_token"]) -> None: ...
-
-Global___ListDocumentsResponse: typing_extensions.TypeAlias = ListDocumentsResponse
-
-@typing.final
-class DocumentInfo(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    DOCUMENT_ID_FIELD_NUMBER: builtins.int
-    FILENAME_FIELD_NUMBER: builtins.int
-    UPLOAD_TIMESTAMP_FIELD_NUMBER: builtins.int
-    CHUNKS_COUNT_FIELD_NUMBER: builtins.int
-    document_id: builtins.str
-    """Unique identifier for the document"""
-    filename: builtins.str
-    """Name of the document"""
-    upload_timestamp: builtins.int
-    """Upload timestamp"""
-    chunks_count: builtins.int
-    """Number of chunks in the document"""
-    def __init__(
-        self,
-        *,
-        document_id: builtins.str = ...,
-        filename: builtins.str = ...,
-        upload_timestamp: builtins.int = ...,
-        chunks_count: builtins.int = ...,
-    ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["chunks_count", b"chunks_count", "document_id", b"document_id", "filename", b"filename", "upload_timestamp", b"upload_timestamp"]) -> None: ...
-
-Global___DocumentInfo: typing_extensions.TypeAlias = DocumentInfo

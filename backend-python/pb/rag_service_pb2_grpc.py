@@ -4,7 +4,7 @@
 import grpc
 import grpc.experimental
 
-from . import rag_service_pb2 as rag__service__pb2
+from pb import rag_service_pb2 as rag__service__pb2
 
 GRPC_GENERATED_VERSION = "1.76.0"
 GRPC_VERSION = grpc.__version__
@@ -126,22 +126,16 @@ class KnowledgeBaseServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.UploadDocument = channel.stream_unary(
-            "/rag.KnowledgeBaseService/UploadDocument",
-            request_serializer=rag__service__pb2.UploadRequest.SerializeToString,
-            response_deserializer=rag__service__pb2.UploadResponse.FromString,
+        self.ProcessDocument = channel.unary_unary(
+            "/rag.KnowledgeBaseService/ProcessDocument",
+            request_serializer=rag__service__pb2.ProcessDocumentRequest.SerializeToString,
+            response_deserializer=rag__service__pb2.ProcessDocumentResponse.FromString,
             _registered_method=True,
         )
         self.DeleteDocument = channel.unary_unary(
             "/rag.KnowledgeBaseService/DeleteDocument",
             request_serializer=rag__service__pb2.DeleteDocumentRequest.SerializeToString,
             response_deserializer=rag__service__pb2.DeleteDocumentResponse.FromString,
-            _registered_method=True,
-        )
-        self.ListDocuments = channel.unary_unary(
-            "/rag.KnowledgeBaseService/ListDocuments",
-            request_serializer=rag__service__pb2.ListDocumentsRequest.SerializeToString,
-            response_deserializer=rag__service__pb2.ListDocumentsResponse.FromString,
             _registered_method=True,
         )
 
@@ -152,25 +146,17 @@ class KnowledgeBaseServiceServicer(object):
     --------------------------------------------------------
     """
 
-    def UploadDocument(self, request_iterator, context):
-        """/ UploadDocument is an RPC that uploads a document in chunks.
-        / It takes a stream of UploadRequest messages and returns an UploadResponse.
+    def ProcessDocument(self, request, context):
+        """/ ProcessDocument is an RPC that processes a document that was already saved by Go.
+        / Go provides the document_id, file_path, and metadata. Python processes and indexes it.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def DeleteDocument(self, request, context):
-        """/ DeleteDocument is an RPC that deletes a specified document.
+        """/ DeleteDocument is an RPC that deletes a specified document from the vector store.
         / It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
-
-    def ListDocuments(self, request, context):
-        """/ ListDocuments is an RPC that lists all documents in the knowledge base.
-        / It takes a ListDocumentsRequest and returns a ListDocumentsResponse.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -179,20 +165,15 @@ class KnowledgeBaseServiceServicer(object):
 
 def add_KnowledgeBaseServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "UploadDocument": grpc.stream_unary_rpc_method_handler(
-            servicer.UploadDocument,
-            request_deserializer=rag__service__pb2.UploadRequest.FromString,
-            response_serializer=rag__service__pb2.UploadResponse.SerializeToString,
+        "ProcessDocument": grpc.unary_unary_rpc_method_handler(
+            servicer.ProcessDocument,
+            request_deserializer=rag__service__pb2.ProcessDocumentRequest.FromString,
+            response_serializer=rag__service__pb2.ProcessDocumentResponse.SerializeToString,
         ),
         "DeleteDocument": grpc.unary_unary_rpc_method_handler(
             servicer.DeleteDocument,
             request_deserializer=rag__service__pb2.DeleteDocumentRequest.FromString,
             response_serializer=rag__service__pb2.DeleteDocumentResponse.SerializeToString,
-        ),
-        "ListDocuments": grpc.unary_unary_rpc_method_handler(
-            servicer.ListDocuments,
-            request_deserializer=rag__service__pb2.ListDocumentsRequest.FromString,
-            response_serializer=rag__service__pb2.ListDocumentsResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -210,8 +191,8 @@ class KnowledgeBaseService(object):
     """
 
     @staticmethod
-    def UploadDocument(
-        request_iterator,
+    def ProcessDocument(
+        request,
         target,
         options=(),
         channel_credentials=None,
@@ -222,12 +203,12 @@ class KnowledgeBaseService(object):
         timeout=None,
         metadata=None,
     ):
-        return grpc.experimental.stream_unary(
-            request_iterator,
+        return grpc.experimental.unary_unary(
+            request,
             target,
-            "/rag.KnowledgeBaseService/UploadDocument",
-            rag__service__pb2.UploadRequest.SerializeToString,
-            rag__service__pb2.UploadResponse.FromString,
+            "/rag.KnowledgeBaseService/ProcessDocument",
+            rag__service__pb2.ProcessDocumentRequest.SerializeToString,
+            rag__service__pb2.ProcessDocumentResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -258,36 +239,6 @@ class KnowledgeBaseService(object):
             "/rag.KnowledgeBaseService/DeleteDocument",
             rag__service__pb2.DeleteDocumentRequest.SerializeToString,
             rag__service__pb2.DeleteDocumentResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True,
-        )
-
-    @staticmethod
-    def ListDocuments(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            "/rag.KnowledgeBaseService/ListDocuments",
-            rag__service__pb2.ListDocumentsRequest.SerializeToString,
-            rag__service__pb2.ListDocumentsResponse.FromString,
             options,
             channel_credentials,
             insecure,

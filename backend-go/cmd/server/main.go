@@ -38,28 +38,44 @@ func main() {
 	// 4. Initialize Repositories
 	userRepo := repository.NewUserRepository(db)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(db)
+	groupRepo := repository.NewGroupRepository(db)
+	documentRepo := repository.NewDocumentRepository(db)
+	orgRepo := repository.NewOrganizationRepository(db)
 
 	// 5. Initialize Services
 	authService := service.NewAuthService(userRepo, refreshTokenRepo, cfg, appLogger)
+	groupService := service.NewGroupService(groupRepo, orgRepo, userRepo, appLogger)
+	documentService := service.NewDocumentService(documentRepo, groupRepo, orgRepo, cfg, appLogger)
+	orgService := service.NewOrganizationService(orgRepo, groupRepo, userRepo, appLogger)
 
 	// 6. Initialize Handlers & Middleware
 	authHandler := handler.NewAuthHandler(authService, appLogger)
+	groupHandler := handler.NewGroupHandler(groupService, appLogger)
+	adminHandler := handler.NewAdminHandler(orgService, groupService, appLogger)
 	authMiddleware := middleware.NewAuthMiddleware(authService, appLogger)
 
-	// 7. Start RAG Client
+	// 7. Initialize Rate Limiter
+	rateLimiter, err := middleware.NewRateLimiter(cfg, appLogger)
+	if err != nil {
+		appLogger.Warn("⚠️ Failed to connect to Redis, using no-op rate limiter", "error", err)
+		rateLimiter = middleware.NewNoOpRateLimiter(appLogger)
+	}
+	defer rateLimiter.Close()
+
+	// 8. Start RAG Client
 	grpcClient, err := grpc.NewClient(cfg.AIServiceAddr, false)
 	if err != nil {
 		appLogger.Error("❌ Failed to connect to Python service", "error", err)
 	}
 	defer grpcClient.Close()
 
-	// 8. Setup Chat and KnowledgeBase Handlers and Router
-	chatHandler := handler.NewChatHandler(grpcClient, cfg, appLogger)
-	knowledgeBaseHandler := handler.NewKnowledgeBaseHandler(grpcClient, cfg, appLogger)
+	// 9. Setup Chat and KnowledgeBase Handlers and Router
+	chatHandler := handler.NewChatHandler(grpcClient, cfg, appLogger, rateLimiter, orgRepo, groupRepo)
+	knowledgeBaseHandler := handler.NewKnowledgeBaseHandler(grpcClient, documentService, groupRepo, cfg, appLogger)
 
-	r := api.SetupRouter(chatHandler, knowledgeBaseHandler, authHandler, authMiddleware)
+	r := api.SetupRouter(chatHandler, knowledgeBaseHandler, authHandler, groupHandler, adminHandler, authMiddleware)
 
-	// 9. Start Server
+	// 10. Start Server
 	addr := fmt.Sprintf(":%s", cfg.ApiServicePort)
 	appLogger.Info("🌍 [Go] HTTP Server running on port...", "port", addr)
 	if err := r.Run(addr); err != nil {

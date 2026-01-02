@@ -36,6 +36,7 @@ func TestAuthService_Register(t *testing.T) {
 			password: "password123",
 			setupMocks: func(userRepo *testutil.MockUserRepository, tokenRepo *testutil.MockRefreshTokenRepository) {
 				userRepo.On("FindByEmail", "test@example.com").Return(nil, repository.ErrUserNotFound)
+				userRepo.On("FindByUsername", "testuser").Return(nil, repository.ErrUserNotFound)
 				userRepo.On("Create", mock.AnythingOfType("*models.User")).Run(func(args mock.Arguments) {
 					user := args.Get(0).(*models.User)
 					user.ID = 1
@@ -63,7 +64,7 @@ func TestAuthService_Register(t *testing.T) {
 			tt.setupMocks(userRepo, tokenRepo)
 
 			authService := testutil.CreateAuthServiceWithMocks(userRepo, tokenRepo)
-			user, tokens, err := authService.Register(tt.email, tt.password)
+			user, tokens, err := authService.Register("testuser", tt.email, "Test User", tt.password)
 
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -277,6 +278,7 @@ func TestAuthService_ValidateAccessToken(t *testing.T) {
 
 		// Register to get a valid token
 		userRepo.On("FindByEmail", "test@example.com").Return(nil, repository.ErrUserNotFound)
+		userRepo.On("FindByUsername", "testuser").Return(nil, repository.ErrUserNotFound)
 		userRepo.On("Create", mock.AnythingOfType("*models.User")).Run(func(args mock.Arguments) {
 			user := args.Get(0).(*models.User)
 			user.ID = 1
@@ -284,7 +286,7 @@ func TestAuthService_ValidateAccessToken(t *testing.T) {
 		tokenRepo.On("Create", mock.AnythingOfType("*models.RefreshToken")).Return(nil)
 
 		authService := testutil.CreateAuthServiceWithMocks(userRepo, tokenRepo)
-		_, tokens, err := authService.Register("test@example.com", "password123")
+		_, tokens, err := authService.Register("testuser", "test@example.com", "Test User", "password123")
 		require.NoError(t, err)
 
 		userID, err := authService.ValidateAccessToken(tokens.AccessToken)
@@ -324,11 +326,14 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name: "success",
 			requestBody: map[string]string{
-				"email":    "test@example.com",
-				"password": "password123",
+				"username":  "testuser",
+				"email":     "test@example.com",
+				"full_name": "Test User",
+				"password":  "password123",
 			},
 			setupMocks: func(userRepo *testutil.MockUserRepository, tokenRepo *testutil.MockRefreshTokenRepository) {
 				userRepo.On("FindByEmail", "test@example.com").Return(nil, repository.ErrUserNotFound)
+				userRepo.On("FindByUsername", "testuser").Return(nil, repository.ErrUserNotFound)
 				userRepo.On("Create", mock.AnythingOfType("*models.User")).Run(func(args mock.Arguments) {
 					user := args.Get(0).(*models.User)
 					user.ID = 1
@@ -347,8 +352,10 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name: "email already exists",
 			requestBody: map[string]string{
-				"email":    "existing@example.com",
-				"password": "password123",
+				"username":  "testuser",
+				"email":     "existing@example.com",
+				"full_name": "Test User",
+				"password":  "password123",
 			},
 			setupMocks: func(userRepo *testutil.MockUserRepository, tokenRepo *testutil.MockRefreshTokenRepository) {
 				userRepo.On("FindByEmail", "existing@example.com").Return(&models.User{ID: 1}, nil)
@@ -361,8 +368,10 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name: "invalid email",
 			requestBody: map[string]string{
-				"email":    "invalid-email",
-				"password": "password123",
+				"username":  "testuser",
+				"email":     "invalid-email",
+				"full_name": "Test User",
+				"password":  "password123",
 			},
 			setupMocks:     func(userRepo *testutil.MockUserRepository, tokenRepo *testutil.MockRefreshTokenRepository) {},
 			expectedStatus: 400,
@@ -370,8 +379,10 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name: "short password",
 			requestBody: map[string]string{
-				"email":    "test@example.com",
-				"password": "short",
+				"username":  "testuser",
+				"email":     "test@example.com",
+				"full_name": "Test User",
+				"password":  "short",
 			},
 			setupMocks:     func(userRepo *testutil.MockUserRepository, tokenRepo *testutil.MockRefreshTokenRepository) {},
 			expectedStatus: 400,
@@ -379,7 +390,9 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name: "missing email",
 			requestBody: map[string]string{
-				"password": "password123",
+				"username":  "testuser",
+				"full_name": "Test User",
+				"password":  "password123",
 			},
 			setupMocks:     func(userRepo *testutil.MockUserRepository, tokenRepo *testutil.MockRefreshTokenRepository) {},
 			expectedStatus: 400,
@@ -387,7 +400,9 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name: "missing password",
 			requestBody: map[string]string{
-				"email": "test@example.com",
+				"username":  "testuser",
+				"email":     "test@example.com",
+				"full_name": "Test User",
 			},
 			setupMocks:     func(userRepo *testutil.MockUserRepository, tokenRepo *testutil.MockRefreshTokenRepository) {},
 			expectedStatus: 400,

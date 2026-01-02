@@ -217,3 +217,236 @@ async def test_delete_by_document_id(mock_settings, mock_logger, mock_embedding_
         call_args = async_client_instance.delete.call_args
         # Collection name comes from mock_settings.qdrant_collection_name
         assert call_args[1]["collection_name"] == mock_settings.qdrant_collection_name
+
+
+@pytest.mark.asyncio
+async def test_upsert_vectors_with_metadata(mock_settings, mock_logger, mock_embedding_generator):
+    """Test that vectors are correctly upserted with multi-tenant metadata."""
+    with (
+        patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
+        patch("app.services.vector_store.QdrantClient"),
+    ):
+        async_client_instance = MockAsyncClient.return_value
+        async_client_instance.upsert = AsyncMock()
+
+        store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
+
+        vectors = [[0.1, 0.2], [0.3, 0.4]]
+        chunk_ids = ["chunk-1", "chunk-2"]
+        document_id = "doc-123"
+        filename = "test.pdf"
+        organization_id = 1
+        group_id = 10
+        owner_id = 100
+
+        count = await store.upsert_vectors_with_metadata(
+            vectors=vectors,
+            chunk_ids=chunk_ids,
+            document_id=document_id,
+            filename=filename,
+            organization_id=organization_id,
+            group_id=group_id,
+            owner_id=owner_id,
+        )
+
+        assert count == 2
+        async_client_instance.upsert.assert_called_once()
+
+        call_args = async_client_instance.upsert.call_args
+        points = call_args[1]["points"]
+
+        # Verify first point has correct metadata
+        assert points[0].payload["chunk_id"] == "chunk-1"
+        assert points[0].payload["document_id"] == "doc-123"
+        assert points[0].payload["filename"] == "test.pdf"
+        assert points[0].payload["organization_id"] == 1
+        assert points[0].payload["group_id"] == 10
+        assert points[0].payload["owner_id"] == 100
+
+        # Verify second point
+        assert points[1].payload["chunk_id"] == "chunk-2"
+        assert points[1].payload["organization_id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_upsert_vectors_with_metadata_org_wide(
+    mock_settings, mock_logger, mock_embedding_generator
+):
+    """Test upserting vectors for org-wide document (group_id is None)."""
+    with (
+        patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
+        patch("app.services.vector_store.QdrantClient"),
+    ):
+        async_client_instance = MockAsyncClient.return_value
+        async_client_instance.upsert = AsyncMock()
+
+        store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
+
+        vectors = [[0.1, 0.2]]
+        chunk_ids = ["chunk-1"]
+
+        count = await store.upsert_vectors_with_metadata(
+            vectors=vectors,
+            chunk_ids=chunk_ids,
+            document_id="doc-org-wide",
+            filename="org-doc.pdf",
+            organization_id=1,
+            group_id=None,  # Org-wide document
+            owner_id=100,
+        )
+
+        assert count == 1
+        call_args = async_client_instance.upsert.call_args
+        points = call_args[1]["points"]
+
+        # Verify group_id is stored as None for org-wide documents
+        assert points[0].payload["group_id"] is None
+        assert points[0].payload["organization_id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_upsert_vectors_with_metadata_empty_list(
+    mock_settings, mock_logger, mock_embedding_generator
+):
+    """Test that upserting an empty list returns zero count."""
+    with (
+        patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
+        patch("app.services.vector_store.QdrantClient"),
+    ):
+        async_client_instance = MockAsyncClient.return_value
+        async_client_instance.upsert = AsyncMock()
+
+        store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
+
+        count = await store.upsert_vectors_with_metadata(
+            vectors=[],
+            chunk_ids=[],
+            document_id="doc-123",
+            filename="test.pdf",
+            organization_id=1,
+            group_id=None,
+            owner_id=100,
+        )
+
+        assert count == 0
+        async_client_instance.upsert.assert_not_called()
+
+
+# ==================== Tenant-Scoped Search Tests ====================
+
+
+@pytest.mark.asyncio
+async def test_search_with_tenant_filter_org_and_groups(
+    mock_settings, mock_logger, mock_embedding_generator
+):
+    """Test tenant-scoped search with organization ID and group IDs."""
+    with (
+        patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
+        patch("app.services.vector_store.QdrantClient"),
+    ):
+        async_client_instance = MockAsyncClient.return_value
+        mock_result = Mock()
+        mock_result.points = ["hit1", "hit2"]
+        async_client_instance.query_points = AsyncMock(return_value=mock_result)
+
+        store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
+
+        results = await store.search_with_tenant_filter(
+            query_vector=[0.1, 0.2],
+            organization_id=1,
+            group_ids=[10, 20, 30],
+            limit=5,
+        )
+
+        assert len(results) == 2
+        async_client_instance.query_points.assert_called_once()
+
+        # Verify the filter was passed
+        call_kwargs = async_client_instance.query_points.call_args[1]
+        assert "query_filter" in call_kwargs
+        assert call_kwargs["limit"] == 5
+
+
+@pytest.mark.asyncio
+async def test_search_with_tenant_filter_org_only_no_groups(
+    mock_settings, mock_logger, mock_embedding_generator
+):
+    """Test tenant-scoped search with organization ID but no group membership."""
+    with (
+        patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
+        patch("app.services.vector_store.QdrantClient"),
+    ):
+        async_client_instance = MockAsyncClient.return_value
+        mock_result = Mock()
+        mock_result.points = ["org-wide-hit"]
+        async_client_instance.query_points = AsyncMock(return_value=mock_result)
+
+        store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
+
+        # User has no group memberships, should only see org-wide documents
+        results = await store.search_with_tenant_filter(
+            query_vector=[0.1, 0.2],
+            organization_id=1,
+            group_ids=None,  # No groups
+            limit=10,
+        )
+
+        assert len(results) == 1
+        async_client_instance.query_points.assert_called_once()
+
+        # Verify filter includes organization and null group filter
+        call_kwargs = async_client_instance.query_points.call_args[1]
+        assert "query_filter" in call_kwargs
+
+
+@pytest.mark.asyncio
+async def test_search_with_tenant_filter_empty_groups(
+    mock_settings, mock_logger, mock_embedding_generator
+):
+    """Test tenant-scoped search with empty group list (same as no groups)."""
+    with (
+        patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
+        patch("app.services.vector_store.QdrantClient"),
+    ):
+        async_client_instance = MockAsyncClient.return_value
+        mock_result = Mock()
+        mock_result.points = []
+        async_client_instance.query_points = AsyncMock(return_value=mock_result)
+
+        store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
+
+        results = await store.search_with_tenant_filter(
+            query_vector=[0.1, 0.2],
+            organization_id=1,
+            group_ids=[],  # Empty list, treated same as None
+            limit=25,
+        )
+
+        assert len(results) == 0
+        async_client_instance.query_points.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_search_with_tenant_filter_default_limit(
+    mock_settings, mock_logger, mock_embedding_generator
+):
+    """Test tenant-scoped search uses default limit of 25."""
+    with (
+        patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
+        patch("app.services.vector_store.QdrantClient"),
+    ):
+        async_client_instance = MockAsyncClient.return_value
+        mock_result = Mock()
+        mock_result.points = []
+        async_client_instance.query_points = AsyncMock(return_value=mock_result)
+
+        store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
+
+        await store.search_with_tenant_filter(
+            query_vector=[0.1, 0.2],
+            organization_id=1,
+            group_ids=[10],
+        )
+
+        call_kwargs = async_client_instance.query_points.call_args[1]
+        assert call_kwargs["limit"] == 25

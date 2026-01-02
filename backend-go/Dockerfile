@@ -20,6 +20,9 @@ WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
+RUN mkdir -p /tmp/studyai/uploads && \
+    chown -R appuser:appgroup /tmp/studyai/uploads
+
 COPY --from=builder /app/orchestrator .
 
 RUN chown appuser:appgroup ./orchestrator

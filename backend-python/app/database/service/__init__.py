@@ -1,3 +1,3 @@
-from .documents import DocumentService
+from .chunks import ChunkService
 
-__all__ = ["DocumentService"]
+__all__ = ["ChunkService"]
