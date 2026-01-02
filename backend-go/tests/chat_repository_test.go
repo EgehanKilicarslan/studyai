@@ -60,7 +60,7 @@ func TestChatRepository_CreateSession(t *testing.T) {
 			session: &models.ChatSession{
 				ID:             uuid.New(),
 				UserID:         user.ID,
-				OrganizationID: org.ID,
+				OrganizationID: &org.ID,
 				CreatedAt:      time.Now(),
 				UpdatedAt:      time.Now(),
 			},
@@ -71,7 +71,7 @@ func TestChatRepository_CreateSession(t *testing.T) {
 			session: &models.ChatSession{
 				ID:             uuid.New(),
 				UserID:         user.ID,
-				OrganizationID: org.ID,
+				OrganizationID: &org.ID,
 			},
 			wantErr: true, // Should fail on duplicate ID
 		},
@@ -120,7 +120,7 @@ func TestChatRepository_GetSession(t *testing.T) {
 	session := &models.ChatSession{
 		ID:             sessionID,
 		UserID:         user.ID,
-		OrganizationID: org.ID,
+		OrganizationID: &org.ID,
 	}
 	require.NoError(t, repo.CreateSession(session))
 
@@ -137,7 +137,8 @@ func TestChatRepository_GetSession(t *testing.T) {
 			checkFunc: func(t *testing.T, s *models.ChatSession) {
 				assert.Equal(t, sessionID, s.ID)
 				assert.Equal(t, user.ID, s.UserID)
-				assert.Equal(t, org.ID, s.OrganizationID)
+				assert.NotNil(t, s.OrganizationID)
+				assert.Equal(t, org.ID, *s.OrganizationID)
 			},
 		},
 		{
@@ -187,7 +188,7 @@ func TestChatRepository_GetOrCreateSession(t *testing.T) {
 		name           string
 		sessionID      uuid.UUID
 		userID         uint
-		organizationID uint
+		organizationID *uint
 		setupFunc      func() uuid.UUID
 		wantCreated    bool
 		wantErr        bool
@@ -196,7 +197,7 @@ func TestChatRepository_GetOrCreateSession(t *testing.T) {
 			name:           "create_new_session",
 			sessionID:      uuid.New(),
 			userID:         user.ID,
-			organizationID: org.ID,
+			organizationID: &org.ID,
 			wantCreated:    true,
 			wantErr:        false,
 		},
@@ -208,14 +209,22 @@ func TestChatRepository_GetOrCreateSession(t *testing.T) {
 				session := &models.ChatSession{
 					ID:             sid,
 					UserID:         user.ID,
-					OrganizationID: org.ID,
+					OrganizationID: &org.ID,
 				}
 				require.NoError(t, repo.CreateSession(session))
 				return sid
 			},
 			userID:         user.ID,
-			organizationID: org.ID,
+			organizationID: &org.ID,
 			wantCreated:    false,
+			wantErr:        false,
+		},
+		{
+			name:           "create_session_without_org",
+			sessionID:      uuid.New(),
+			userID:         user.ID,
+			organizationID: nil,
+			wantCreated:    true,
 			wantErr:        false,
 		},
 	}
@@ -237,7 +246,12 @@ func TestChatRepository_GetOrCreateSession(t *testing.T) {
 				assert.Equal(t, tt.wantCreated, created)
 				assert.Equal(t, sessionID, result.ID)
 				assert.Equal(t, tt.userID, result.UserID)
-				assert.Equal(t, tt.organizationID, result.OrganizationID)
+				if tt.organizationID != nil {
+					assert.NotNil(t, result.OrganizationID)
+					assert.Equal(t, *tt.organizationID, *result.OrganizationID)
+				} else {
+					assert.Nil(t, result.OrganizationID)
+				}
 			}
 		})
 	}
@@ -265,7 +279,7 @@ func TestChatRepository_CreateMessage(t *testing.T) {
 	session := &models.ChatSession{
 		ID:             sessionID,
 		UserID:         user.ID,
-		OrganizationID: org.ID,
+		OrganizationID: &org.ID,
 	}
 	require.NoError(t, repo.CreateSession(session))
 
@@ -342,7 +356,7 @@ func TestChatRepository_GetRecentMessages(t *testing.T) {
 	session := &models.ChatSession{
 		ID:             sessionID,
 		UserID:         user.ID,
-		OrganizationID: org.ID,
+		OrganizationID: &org.ID,
 	}
 	require.NoError(t, repo.CreateSession(session))
 
@@ -426,7 +440,7 @@ func TestChatRepository_DeleteSessionMessages(t *testing.T) {
 	session := &models.ChatSession{
 		ID:             sessionID,
 		UserID:         user.ID,
-		OrganizationID: org.ID,
+		OrganizationID: &org.ID,
 	}
 	require.NoError(t, repo.CreateSession(session))
 
@@ -474,7 +488,7 @@ func TestChatRepository_GetUserSessions(t *testing.T) {
 		session := &models.ChatSession{
 			ID:             uuid.New(),
 			UserID:         user.ID,
-			OrganizationID: org1.ID,
+			OrganizationID: &org1.ID,
 		}
 		require.NoError(t, repo.CreateSession(session))
 	}
@@ -483,35 +497,35 @@ func TestChatRepository_GetUserSessions(t *testing.T) {
 	session := &models.ChatSession{
 		ID:             uuid.New(),
 		UserID:         user.ID,
-		OrganizationID: org2.ID,
+		OrganizationID: &org2.ID,
 	}
 	require.NoError(t, repo.CreateSession(session))
 
 	tests := []struct {
 		name           string
 		userID         uint
-		organizationID uint
+		organizationID *uint
 		limit          int
 		expectedCount  int
 	}{
 		{
 			name:           "get_all_sessions_for_org1",
 			userID:         user.ID,
-			organizationID: org1.ID,
+			organizationID: &org1.ID,
 			limit:          10,
 			expectedCount:  3,
 		},
 		{
 			name:           "get_limited_sessions",
 			userID:         user.ID,
-			organizationID: org1.ID,
+			organizationID: &org1.ID,
 			limit:          2,
 			expectedCount:  2,
 		},
 		{
 			name:           "get_sessions_for_org2",
 			userID:         user.ID,
-			organizationID: org2.ID,
+			organizationID: &org2.ID,
 			limit:          10,
 			expectedCount:  1,
 		},
@@ -527,7 +541,10 @@ func TestChatRepository_GetUserSessions(t *testing.T) {
 			// Verify all sessions belong to the correct user and org
 			for _, session := range sessions {
 				assert.Equal(t, tt.userID, session.UserID)
-				assert.Equal(t, tt.organizationID, session.OrganizationID)
+				if tt.organizationID != nil {
+					assert.NotNil(t, session.OrganizationID)
+					assert.Equal(t, *tt.organizationID, *session.OrganizationID)
+				}
 			}
 		})
 	}

@@ -582,12 +582,12 @@ func (m *MockChatRepository) GetSession(sessionID uuid.UUID) (*models.ChatSessio
 	return args.Get(0).(*models.ChatSession), args.Error(1)
 }
 
-func (m *MockChatRepository) GetUserSessions(userID uint, organizationID uint, limit int) ([]models.ChatSession, error) {
+func (m *MockChatRepository) GetUserSessions(userID uint, organizationID *uint, limit int) ([]models.ChatSession, error) {
 	args := m.Called(userID, organizationID, limit)
 	return args.Get(0).([]models.ChatSession), args.Error(1)
 }
 
-func (m *MockChatRepository) GetOrCreateSession(sessionID uuid.UUID, userID uint, organizationID uint) (*models.ChatSession, bool, error) {
+func (m *MockChatRepository) GetOrCreateSession(sessionID uuid.UUID, userID uint, organizationID *uint) (*models.ChatSession, bool, error) {
 	args := m.Called(sessionID, userID, organizationID)
 	if args.Get(0) == nil {
 		return nil, args.Bool(1), args.Error(2)

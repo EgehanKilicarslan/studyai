@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"0\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"a\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\"d\n\x06Source\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x13\n\x0bpage_number\x18\x03 \x01(\x05\x12\x0f\n\x07snippet\x18\x04 \x01(\t\x12\r\n\x05score\x18\x05 \x01(\x02\"\xa5\x01\n\x16ProcessDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x10\n\x08\x66ilename\x18\x03 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x17\n\x0forganization_id\x18\x05 \x01(\r\x12\x10\n\x08group_id\x18\x06 \x01(\r\x12\x10\n\x08owner_id\x18\x07 \x01(\r\"e\n\x17ProcessDocumentResponse\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x14\n\x0c\x63hunks_count\x18\x03 \x01(\x05\x12\x0f\n\x07message\x18\x04 \x01(\t\",\n\x15\x44\x65leteDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\"9\n\x16\x44\x65leteDocumentResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t2<\n\x0b\x43hatService\x12-\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x01\x32\xaf\x01\n\x14KnowledgeBaseService\x12L\n\x0fProcessDocument\x12\x1b.rag.ProcessDocumentRequest\x1a\x1c.rag.ProcessDocumentResponse\x12I\n\x0e\x44\x65leteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponseB\x06Z\x04./pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"0\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"t\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\x12\x11\n\tis_cached\x18\x04 \x01(\x08\"d\n\x06Source\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x13\n\x0bpage_number\x18\x03 \x01(\x05\x12\x0f\n\x07snippet\x18\x04 \x01(\t\x12\r\n\x05score\x18\x05 \x01(\x02\"\xa5\x01\n\x16ProcessDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x10\n\x08\x66ilename\x18\x03 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x17\n\x0forganization_id\x18\x05 \x01(\r\x12\x10\n\x08group_id\x18\x06 \x01(\r\x12\x10\n\x08owner_id\x18\x07 \x01(\r\"e\n\x17ProcessDocumentResponse\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x14\n\x0c\x63hunks_count\x18\x03 \x01(\x05\x12\x0f\n\x07message\x18\x04 \x01(\t\",\n\x15\x44\x65leteDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\"9\n\x16\x44\x65leteDocumentResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t2<\n\x0b\x43hatService\x12-\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x01\x32\xaf\x01\n\x14KnowledgeBaseService\x12L\n\x0fProcessDocument\x12\x1b.rag.ProcessDocumentRequest\x1a\x1c.rag.ProcessDocumentResponse\x12I\n\x0e\x44\x65leteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponseB\x06Z\x04./pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,19 +35,19 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CHATREQUEST']._serialized_start=26
   _globals['_CHATREQUEST']._serialized_end=74
   _globals['_CHATRESPONSE']._serialized_start=76
-  _globals['_CHATRESPONSE']._serialized_end=173
-  _globals['_SOURCE']._serialized_start=175
-  _globals['_SOURCE']._serialized_end=275
-  _globals['_PROCESSDOCUMENTREQUEST']._serialized_start=278
-  _globals['_PROCESSDOCUMENTREQUEST']._serialized_end=443
-  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_start=445
-  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_end=546
-  _globals['_DELETEDOCUMENTREQUEST']._serialized_start=548
-  _globals['_DELETEDOCUMENTREQUEST']._serialized_end=592
-  _globals['_DELETEDOCUMENTRESPONSE']._serialized_start=594
-  _globals['_DELETEDOCUMENTRESPONSE']._serialized_end=651
-  _globals['_CHATSERVICE']._serialized_start=653
-  _globals['_CHATSERVICE']._serialized_end=713
-  _globals['_KNOWLEDGEBASESERVICE']._serialized_start=716
-  _globals['_KNOWLEDGEBASESERVICE']._serialized_end=891
+  _globals['_CHATRESPONSE']._serialized_end=192
+  _globals['_SOURCE']._serialized_start=194
+  _globals['_SOURCE']._serialized_end=294
+  _globals['_PROCESSDOCUMENTREQUEST']._serialized_start=297
+  _globals['_PROCESSDOCUMENTREQUEST']._serialized_end=462
+  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_start=464
+  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_end=565
+  _globals['_DELETEDOCUMENTREQUEST']._serialized_start=567
+  _globals['_DELETEDOCUMENTREQUEST']._serialized_end=611
+  _globals['_DELETEDOCUMENTRESPONSE']._serialized_start=613
+  _globals['_DELETEDOCUMENTRESPONSE']._serialized_end=670
+  _globals['_CHATSERVICE']._serialized_start=672
+  _globals['_CHATSERVICE']._serialized_end=732
+  _globals['_KNOWLEDGEBASESERVICE']._serialized_start=735
+  _globals['_KNOWLEDGEBASESERVICE']._serialized_end=910
 # @@protoc_insertion_point(module_scope)

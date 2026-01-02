@@ -44,6 +44,7 @@ message ChatResponse {
   string          answer             = 1; // Generated answer
   repeated Source source_documents   = 2; // Retrieved source documents
   double          processing_time_ms = 3; // Processing time in milliseconds
+  bool            is_cached          = 4; // Whether the response was served from semantic cache
 }
 
 message Source {

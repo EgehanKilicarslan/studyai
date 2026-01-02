@@ -84,6 +84,7 @@ type ChatResponse struct {
 	Answer           string                 `protobuf:"bytes,1,opt,name=answer,proto3" json:"answer,omitempty"`                                                 // Generated answer
 	SourceDocuments  []*Source              `protobuf:"bytes,2,rep,name=source_documents,json=sourceDocuments,proto3" json:"source_documents,omitempty"`        // Retrieved source documents
 	ProcessingTimeMs float64                `protobuf:"fixed64,3,opt,name=processing_time_ms,json=processingTimeMs,proto3" json:"processing_time_ms,omitempty"` // Processing time in milliseconds
+	IsCached         bool                   `protobuf:"varint,4,opt,name=is_cached,json=isCached,proto3" json:"is_cached,omitempty"`                            // Whether the response was served from semantic cache
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -137,6 +138,13 @@ func (x *ChatResponse) GetProcessingTimeMs() float64 {
 		return x.ProcessingTimeMs
 	}
 	return 0
+}
+
+func (x *ChatResponse) GetIsCached() bool {
+	if x != nil {
+		return x.IsCached
+	}
+	return false
 }
 
 type Source struct {
@@ -485,11 +493,12 @@ const file_rag_service_proto_rawDesc = "" +
 	"\vChatRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\"\x8c\x01\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\"\xa9\x01\n" +
 	"\fChatResponse\x12\x16\n" +
 	"\x06answer\x18\x01 \x01(\tR\x06answer\x126\n" +
 	"\x10source_documents\x18\x02 \x03(\v2\v.rag.SourceR\x0fsourceDocuments\x12,\n" +
-	"\x12processing_time_ms\x18\x03 \x01(\x01R\x10processingTimeMs\"\x96\x01\n" +
+	"\x12processing_time_ms\x18\x03 \x01(\x01R\x10processingTimeMs\x12\x1b\n" +
+	"\tis_cached\x18\x04 \x01(\bR\bisCached\"\x96\x01\n" +
 	"\x06Source\x12\x1f\n" +
 	"\vdocument_id\x18\x01 \x01(\tR\n" +
 	"documentId\x12\x1a\n" +

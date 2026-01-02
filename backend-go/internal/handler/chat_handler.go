@@ -203,15 +203,14 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 		h.logger.Info("🆕 [Handler] Generated new session ID", "session_id", sessionID)
 	}
 
-	// Ensure organization ID is set (required for sessions)
-	if orgIDUint == 0 {
-		h.logger.Error("❌ [Handler] Organization ID is required for chat sessions")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Organization ID is required"})
-		return
+	// Convert orgIDUint to pointer (nil if 0, meaning no organization context)
+	var orgIDPtr *uint
+	if orgIDUint > 0 {
+		orgIDPtr = &orgIDUint
 	}
 
-	// Get or create session in database
-	_, _, err = h.chatRepo.GetOrCreateSession(sessionID, userIDUint, orgIDUint)
+	// Get or create session in database (organization is optional)
+	_, _, err = h.chatRepo.GetOrCreateSession(sessionID, userIDUint, orgIDPtr)
 	if err != nil {
 		h.logger.Error("❌ [Handler] Failed to get/create session",
 			"session_id", sessionID,

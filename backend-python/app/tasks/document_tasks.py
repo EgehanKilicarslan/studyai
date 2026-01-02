@@ -304,7 +304,7 @@ def process_document_task(
         ]
 
         qdrant_client.upsert(
-            collection_name=settings.qdrant_collection_name,
+            collection_name=settings.qdrant_docs_collection_name,
             points=points,
         )
         qdrant_client.close()

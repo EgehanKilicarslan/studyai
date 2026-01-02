@@ -55,10 +55,13 @@ class ChatResponse(google.protobuf.message.Message):
     ANSWER_FIELD_NUMBER: builtins.int
     SOURCE_DOCUMENTS_FIELD_NUMBER: builtins.int
     PROCESSING_TIME_MS_FIELD_NUMBER: builtins.int
+    IS_CACHED_FIELD_NUMBER: builtins.int
     answer: builtins.str
     """Generated answer"""
     processing_time_ms: builtins.float
     """Processing time in milliseconds"""
+    is_cached: builtins.bool
+    """Whether the response was served from semantic cache"""
     @property
     def source_documents(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___Source]:
         """Retrieved source documents"""
@@ -69,8 +72,9 @@ class ChatResponse(google.protobuf.message.Message):
         answer: builtins.str = ...,
         source_documents: collections.abc.Iterable[Global___Source] | None = ...,
         processing_time_ms: builtins.float = ...,
+        is_cached: builtins.bool = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["answer", b"answer", "processing_time_ms", b"processing_time_ms", "source_documents", b"source_documents"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["answer", b"answer", "is_cached", b"is_cached", "processing_time_ms", b"processing_time_ms", "source_documents", b"source_documents"]) -> None: ...
 
 Global___ChatResponse: typing_extensions.TypeAlias = ChatResponse
 

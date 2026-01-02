@@ -1,10 +1,20 @@
+import uuid
 from typing import List, Optional
 
 from config import Settings
 from logger import AppLogger
+from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient, QdrantClient, models
 
 from .embedding_generator import EmbeddingGenerator
+
+
+class CacheHit(BaseModel):
+    """Represents a semantic cache hit result."""
+
+    response_text: str
+    score: float
+    cache_id: str
 
 
 class VectorStore:
@@ -57,7 +67,8 @@ class VectorStore:
 
         self.logger = logger.get_logger(__name__)
         self.client = AsyncQdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
-        self.collection_name = settings.qdrant_collection_name
+        self.collection_name = settings.qdrant_docs_collection_name
+        self.cache_collection_name = settings.qdrant_cache_collection_name
         self.vector_size = embedding_generator.vector_size
 
         self._ensure_collection(settings)
@@ -93,6 +104,19 @@ class VectorStore:
                     ),
                 )
                 self.logger.info("✅ [VectorStore] Collection created (Startup check).")
+
+            # Ensure semantic cache collection exists
+            if not sync_client.collection_exists(self.cache_collection_name):
+                sync_client.create_collection(
+                    collection_name=self.cache_collection_name,
+                    vectors_config=models.VectorParams(
+                        size=self.vector_size,
+                        distance=models.Distance.COSINE,
+                    ),
+                )
+                self.logger.info(
+                    "✅ [VectorStore] Semantic cache collection created (Startup check)."
+                )
         finally:
             sync_client.close()
 
@@ -247,65 +271,59 @@ class VectorStore:
     async def search_with_tenant_filter(
         self,
         query_vector: List[float],
-        organization_id: int,
+        organization_id: Optional[int] = None,
         group_ids: Optional[List[int]] = None,
+        user_id: Optional[int] = None,
         limit: int = 25,
     ) -> List[models.ScoredPoint]:
         """
         Perform a tenant-scoped vector similarity search on the collection.
 
-        Filters results to only include documents that belong to the specified organization
-        and optionally to the user's accessible groups.
+        Documents belong to groups, not organizations directly. Organizations are just
+        containers for groups. Search priority:
+        1. If group_ids provided: Search in those specific groups
+        2. If no group_ids but user_id provided: Search user's personal documents (owner_id)
 
         Args:
             query_vector (List[float]): The vector to query against the collection.
-            organization_id (int): The organization ID to filter by.
-            group_ids (Optional[List[int]]): List of group IDs the user has access to.
-                If None or empty, returns org-wide documents only (group_id is null).
-                If provided, returns documents from those groups OR org-wide documents.
+            organization_id (Optional[int]): The organization ID (for logging/metadata only).
+            group_ids (Optional[List[int]]): List of group IDs to search in.
+            user_id (Optional[int]): The user ID for personal document filtering.
             limit (int, optional): The maximum number of results to return. Defaults to 25.
 
         Returns:
             List[models.ScoredPoint]: A list of scored points representing the search results.
         """
-        # Build the filter for multi-tenant access
-        filter_conditions: list[models.Condition] = [
-            models.FieldCondition(
-                key="organization_id",
-                match=models.MatchValue(value=organization_id),
-            )
-        ]
+        filter_conditions: list[models.Condition] = []
 
-        # Add group-level filtering
         if group_ids:
-            # User can access documents from their groups OR org-wide documents (group_id is null)
-            group_filter = models.Filter(
-                should=[
-                    # Org-wide documents (no specific group) - use IsNullCondition
-                    models.IsNullCondition(
-                        is_null=models.PayloadField(key="group_id"),
-                    ),
-                    # Documents from user's groups
-                    models.FieldCondition(
-                        key="group_id",
-                        match=models.MatchAny(any=group_ids),
-                    ),
-                ]
-            )
-            filter_conditions.append(group_filter)
-        else:
-            # User has no group memberships, only access org-wide documents
+            # Group-scoped search: documents belong to these groups
             filter_conditions.append(
-                models.IsNullCondition(
-                    is_null=models.PayloadField(key="group_id"),
+                models.FieldCondition(
+                    key="group_id",
+                    match=models.MatchAny(any=group_ids),
                 )
             )
+            self.logger.info(
+                f"[VectorStore] Group-scoped search: groups={group_ids}, org={organization_id}"
+            )
+        elif user_id is not None:
+            # User-level search (personal documents only)
+            filter_conditions.append(
+                models.FieldCondition(
+                    key="owner_id",
+                    match=models.MatchValue(value=user_id),
+                )
+            )
+            self.logger.info(f"[VectorStore] User-level search: user_id={user_id}")
+        else:
+            # No filtering context - return empty results for safety
+            self.logger.warning(
+                "[VectorStore] No group or user context provided, returning empty results"
+            )
+            return []
 
         query_filter = models.Filter(must=filter_conditions)
-
-        self.logger.info(
-            f"[VectorStore] Tenant-scoped search: org={organization_id}, groups={group_ids}"
-        )
 
         res = await self.client.query_points(
             collection_name=self.collection_name,
@@ -315,3 +333,146 @@ class VectorStore:
             with_payload=True,
         )
         return res.points
+
+    # -------------------------------------------------------------------------
+    # Semantic Cache Methods (Tenant-Aware)
+    # -------------------------------------------------------------------------
+
+    async def search_cache(
+        self,
+        query_vector: List[float],
+        user_id: Optional[int] = None,
+        group_ids: Optional[List[int]] = None,
+        threshold: float = 0.95,
+    ) -> Optional[CacheHit]:
+        """
+        Search for a cached response matching the query.
+
+        Cache isolation is based on:
+        - group_ids: If provided, cache is scoped to those groups
+        - user_id: If no groups, cache is scoped to the user's personal queries
+
+        Args:
+            query_vector: The embedding vector of the query to search for.
+            user_id: The user ID for personal cache isolation.
+            group_ids: The group IDs for group-level cache isolation.
+            threshold: Minimum similarity score to consider a cache hit (default: 0.95).
+
+        Returns:
+            CacheHit if a sufficiently similar cached response is found, None otherwise.
+        """
+        try:
+            # Build filter based on context
+            filter_conditions: list[models.Condition] = []
+
+            if group_ids:
+                # Group-scoped cache
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="group_ids",
+                        match=models.MatchAny(any=group_ids),
+                    )
+                )
+            elif user_id is not None:
+                # User-scoped cache (personal queries)
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="user_id",
+                        match=models.MatchValue(value=user_id),
+                    )
+                )
+            else:
+                # No context, skip cache
+                return None
+
+            cache_filter = models.Filter(must=filter_conditions)
+
+            # Search for similar queries
+            results = await self.client.query_points(
+                collection_name=self.cache_collection_name,
+                query=query_vector,
+                query_filter=cache_filter,
+                limit=1,
+                with_payload=True,
+                score_threshold=threshold,
+            )
+
+            if results.points:
+                hit = results.points[0]
+                payload = hit.payload or {}
+                response_text = payload.get("response_text", "")
+
+                self.logger.info(
+                    f"[VectorStore] Cache HIT (score={hit.score:.4f}, id={hit.id}, "
+                    f"user={user_id}, groups={group_ids})"
+                )
+
+                return CacheHit(
+                    response_text=response_text,
+                    score=hit.score,
+                    cache_id=str(hit.id),
+                )
+
+            self.logger.debug(f"[VectorStore] Cache MISS for user={user_id}, groups={group_ids}")
+            return None
+
+        except Exception as e:
+            self.logger.error(f"[VectorStore] Error searching cache: {e}")
+            return None
+
+    async def save_to_cache(
+        self,
+        query_vector: List[float],
+        response_text: str,
+        user_id: Optional[int] = None,
+        group_ids: Optional[List[int]] = None,
+    ) -> Optional[str]:
+        """
+        Save a response to the semantic cache with context metadata.
+
+        Cache is scoped by:
+        - group_ids: For group-level queries
+        - user_id: For personal queries (when no groups)
+
+        Args:
+            query_vector: The embedding vector of the query.
+            response_text: The LLM-generated response to cache.
+            user_id: The user ID for personal cache isolation.
+            group_ids: The group IDs for group-level cache isolation.
+
+        Returns:
+            The cache entry ID if successful, None otherwise.
+        """
+        try:
+            cache_id = str(uuid.uuid4())
+
+            payload: dict = {
+                "response_text": response_text,
+            }
+
+            # Add context for cache isolation
+            if group_ids:
+                payload["group_ids"] = group_ids
+            if user_id is not None:
+                payload["user_id"] = user_id
+
+            point = models.PointStruct(
+                id=cache_id,
+                vector=query_vector,
+                payload=payload,
+            )
+
+            await self.client.upsert(
+                collection_name=self.cache_collection_name,
+                points=[point],
+            )
+
+            self.logger.info(
+                f"[VectorStore] Saved cache entry (id={cache_id}, user={user_id}, groups={group_ids})"
+            )
+
+            return cache_id
+
+        except Exception as e:
+            self.logger.error(f"[VectorStore] Error saving to cache: {e}")
+            return None

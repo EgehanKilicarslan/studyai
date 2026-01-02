@@ -30,7 +30,8 @@ class Settings(BaseSettings):
 
     qdrant_host: str = Field(default="vector-db")
     qdrant_port: int = Field(default=6333)
-    qdrant_collection_name: str = Field(default="school_docs")
+    qdrant_docs_collection_name: str = Field(default="docs")
+    qdrant_cache_collection_name: str = Field(default="semantic_cache")
 
     embedding_model_name: str = Field(default="BAAI/bge-small-en-v1.5")
     embedding_chunk_size: int = Field(default=1000)

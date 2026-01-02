@@ -96,6 +96,10 @@ def chat_service(
     mock_reranker,
     mock_chunk_service,
 ):
+    # Add cache methods to mock_vector_store (since cache is now part of VectorStore)
+    mock_vector_store.search_cache = AsyncMock(return_value=None)  # Default: cache miss
+    mock_vector_store.save_to_cache = AsyncMock(return_value="mock-cache-id")
+
     return ChatService(
         logger=mock_logger,
         llm_provider=mock_llm,
@@ -246,16 +250,22 @@ class TestChatService:
         assert "Unauthorized" in responses[0].answer
 
     @pytest.mark.asyncio
-    async def test_chat_missing_organization(self, chat_service, mock_context_no_org):
-        """Test Chat returns error when organization context is not provided."""
+    async def test_chat_without_organization_uses_user_filter(
+        self, chat_service, mock_vector_store, mock_context_no_org
+    ):
+        """Test Chat uses user_id filter when organization context is not provided."""
+        mock_vector_store.search_with_tenant_filter = AsyncMock(return_value=[])
         request = rs.ChatRequest(query="test query", session_id="session-1")
 
         responses = []
         async for response in chat_service.Chat(request, mock_context_no_org):
             responses.append(response)
 
-        assert len(responses) == 1
-        assert "Organization context not provided" in responses[0].answer
+        # Should call search with user_id instead of org_id
+        mock_vector_store.search_with_tenant_filter.assert_called_once()
+        call_kwargs = mock_vector_store.search_with_tenant_filter.call_args[1]
+        assert call_kwargs.get("organization_id") is None
+        assert call_kwargs.get("user_id") == 123
 
     @pytest.mark.asyncio
     async def test_chat_no_documents_found(self, chat_service, mock_vector_store, mock_context):

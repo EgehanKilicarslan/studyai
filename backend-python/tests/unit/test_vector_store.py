@@ -10,7 +10,8 @@ def mock_settings():
     settings = Mock()
     settings.qdrant_host = "vector_db"
     settings.qdrant_port = 6333
-    settings.qdrant_collection_name = "test_collection"
+    settings.qdrant_docs_collection_name = "test_collection"
+    settings.qdrant_cache_collection_name = "semantic_cache"
     return settings
 
 
@@ -34,7 +35,7 @@ def mock_embedding_generator():
 async def test_initialization_creates_collection(
     mock_settings, mock_logger, mock_embedding_generator
 ):
-    """Test that VectorStore creates a new collection during initialization when it doesn't exist."""
+    """Test that VectorStore creates collections during initialization when they don't exist."""
     with (
         patch("app.services.vector_store.AsyncQdrantClient"),
         patch("app.services.vector_store.QdrantClient") as MockSyncClient,
@@ -44,15 +45,19 @@ async def test_initialization_creates_collection(
 
         VectorStore(mock_settings, mock_logger, mock_embedding_generator)
 
-        sync_instance.create_collection.assert_called_once()
-        assert sync_instance.create_collection.call_args[1]["collection_name"] == "test_collection"
+        # Now creates both the main collection and the semantic_cache collection
+        assert sync_instance.create_collection.call_count == 2
+        call_args_list = sync_instance.create_collection.call_args_list
+        collection_names = [call.kwargs["collection_name"] for call in call_args_list]
+        assert "test_collection" in collection_names
+        assert "semantic_cache" in collection_names
 
 
 @pytest.mark.asyncio
 async def test_initialization_skips_collection_creation_if_exists(
     mock_settings, mock_logger, mock_embedding_generator
 ):
-    """Test that VectorStore does not create a collection if it already exists."""
+    """Test that VectorStore does not create collections if they already exist."""
     with (
         patch("app.services.vector_store.AsyncQdrantClient"),
         patch("app.services.vector_store.QdrantClient") as MockSyncClient,
@@ -215,8 +220,8 @@ async def test_delete_by_document_id(mock_settings, mock_logger, mock_embedding_
 
         async_client_instance.delete.assert_called_once()
         call_args = async_client_instance.delete.call_args
-        # Collection name comes from mock_settings.qdrant_collection_name
-        assert call_args[1]["collection_name"] == mock_settings.qdrant_collection_name
+        # Collection name comes from mock_settings.qdrant_docs_collection_name
+        assert call_args[1]["collection_name"] == mock_settings.qdrant_docs_collection_name
 
 
 @pytest.mark.asyncio
@@ -368,25 +373,25 @@ async def test_search_with_tenant_filter_org_and_groups(
 
 
 @pytest.mark.asyncio
-async def test_search_with_tenant_filter_org_only_no_groups(
+async def test_search_with_tenant_filter_user_only_no_groups(
     mock_settings, mock_logger, mock_embedding_generator
 ):
-    """Test tenant-scoped search with organization ID but no group membership."""
+    """Test user-level search when no groups are provided."""
     with (
         patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
         patch("app.services.vector_store.QdrantClient"),
     ):
         async_client_instance = MockAsyncClient.return_value
         mock_result = Mock()
-        mock_result.points = ["org-wide-hit"]
+        mock_result.points = ["user-doc-hit"]
         async_client_instance.query_points = AsyncMock(return_value=mock_result)
 
         store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
 
-        # User has no group memberships, should only see org-wide documents
+        # User has no group memberships, should search user's personal documents
         results = await store.search_with_tenant_filter(
             query_vector=[0.1, 0.2],
-            organization_id=1,
+            user_id=123,
             group_ids=None,  # No groups
             limit=10,
         )
@@ -394,16 +399,16 @@ async def test_search_with_tenant_filter_org_only_no_groups(
         assert len(results) == 1
         async_client_instance.query_points.assert_called_once()
 
-        # Verify filter includes organization and null group filter
+        # Verify filter uses owner_id
         call_kwargs = async_client_instance.query_points.call_args[1]
         assert "query_filter" in call_kwargs
 
 
 @pytest.mark.asyncio
-async def test_search_with_tenant_filter_empty_groups(
+async def test_search_with_tenant_filter_no_context_returns_empty(
     mock_settings, mock_logger, mock_embedding_generator
 ):
-    """Test tenant-scoped search with empty group list (same as no groups)."""
+    """Test that search returns empty when no group_ids or user_id provided."""
     with (
         patch("app.services.vector_store.AsyncQdrantClient") as MockAsyncClient,
         patch("app.services.vector_store.QdrantClient"),
@@ -415,15 +420,18 @@ async def test_search_with_tenant_filter_empty_groups(
 
         store = VectorStore(mock_settings, mock_logger, mock_embedding_generator)
 
+        # No groups, no user_id - should return empty without calling query
         results = await store.search_with_tenant_filter(
             query_vector=[0.1, 0.2],
-            organization_id=1,
-            group_ids=[],  # Empty list, treated same as None
+            organization_id=1,  # Org alone is not enough
+            group_ids=None,
+            user_id=None,
             limit=25,
         )
 
         assert len(results) == 0
-        async_client_instance.query_points.assert_called_once()
+        # Should NOT call query_points since there's no valid filter context
+        async_client_instance.query_points.assert_not_called()
 
 
 @pytest.mark.asyncio

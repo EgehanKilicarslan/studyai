@@ -5,7 +5,12 @@ from database.service import ChunkService
 from dependency_injector import containers, providers
 from llm import get_llm_provider
 from logger import AppLogger
-from services import DocumentParser, EmbeddingGenerator, RerankerService, VectorStore
+from services import (
+    DocumentParser,
+    EmbeddingGenerator,
+    RerankerService,
+    VectorStore,
+)
 from services.grpc import ChatService, KnowledgeBaseService
 
 

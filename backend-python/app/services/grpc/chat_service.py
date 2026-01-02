@@ -140,10 +140,6 @@ class ChatService(rs_grpc.ChatServiceServicer):
 
         # Extract tenant context for scoped search
         organization_id, group_ids = get_tenant_context_from_metadata(context)
-        if organization_id is None:
-            self.logger.error("[ChatService] ❌ Organization ID not found in gRPC metadata")
-            yield rs.ChatResponse(answer="Unauthorized: Organization context not provided.")
-            return
 
         # Extract chat history from metadata
         chat_history = get_chat_history_from_metadata(context)
@@ -158,11 +154,43 @@ class ChatService(rs_grpc.ChatServiceServicer):
             # 1) Generate embedding for the query
             query_vec = (await self.embedding_service.generate([request.query]))[0]
 
-            # 2) Search for relevant vectors in Qdrant with tenant filtering
+            # 2) Check semantic cache for similar queries
+            cache_hit = await self.vector_store.search_cache(
+                query_vector=query_vec,
+                user_id=user_id,
+                group_ids=group_ids,
+                threshold=0.95,
+            )
+
+            if cache_hit:
+                # Cache HIT: Return cached response immediately
+                processing_time = (time.time() - start_time) * 1000
+                self.logger.info(
+                    f"[ChatService] 🚀 Cache HIT! Returning cached response "
+                    f"(score={cache_hit.score:.4f}, time={processing_time:.2f}ms)"
+                )
+
+                # Stream the cached response
+                yield rs.ChatResponse(
+                    answer=cache_hit.response_text,
+                    processing_time_ms=0.0,
+                    is_cached=True,
+                )
+
+                # Final response with processing time (no sources for cached responses)
+                yield rs.ChatResponse(
+                    answer="",
+                    processing_time_ms=processing_time,
+                    is_cached=True,
+                )
+                return
+
+            # 3) Cache MISS: Search for relevant vectors in Qdrant with tenant filtering
             raw_hits = await self.vector_store.search_with_tenant_filter(
                 query_vec,
                 organization_id=organization_id,
                 group_ids=group_ids,
+                user_id=user_id,
                 limit=25,
             )
 
@@ -173,7 +201,7 @@ class ChatService(rs_grpc.ChatServiceServicer):
                 )
                 return
 
-            # 3) Fetch chunk content from PostgreSQL database
+            # 4) Fetch chunk content from PostgreSQL database
             chunk_ids = [str(hit.id) for hit in raw_hits]
             chunks = await self.chunk_service.get_chunks_by_ids(chunk_ids)
 
@@ -210,14 +238,15 @@ class ChatService(rs_grpc.ChatServiceServicer):
             self.logger.info(f"[ChatService] Reranking {len(passages)} documents...")
             ranked_results = self.reranker_service.rerank(request.query, passages, top_k=5)
 
-            # 4) Prepare context documents
+            # 5) Prepare context documents
             context_docs = [res["text"] for res in ranked_results]
             self.logger.info(
                 f"[ChatService] Selected {len(context_docs)} high-quality docs after rerank."
             )
 
-            # 5) Generate answer using LLM with chat history
+            # 6) Generate answer using LLM with chat history
             llm_error = False
+            full_response: list[str] = []  # Collect response for caching
             async for chunk in self.llm.generate_response(
                 query=request.query,
                 context_docs=context_docs,
@@ -226,6 +255,8 @@ class ChatService(rs_grpc.ChatServiceServicer):
                 # Check for LLM errors in the stream
                 if chunk.startswith("Error"):
                     llm_error = True
+                else:
+                    full_response.append(chunk)
 
                 # Stream the response chunk
                 yield rs.ChatResponse(
@@ -233,9 +264,19 @@ class ChatService(rs_grpc.ChatServiceServicer):
                     processing_time_ms=0.0,
                 )
 
-            # 6) Finalize response with sources if no LLM error
+            # 7) Finalize response with sources if no LLM error
             if not llm_error:
                 processing_time = (time.time() - start_time) * 1000
+
+                # Save successful response to semantic cache
+                response_text = "".join(full_response)
+                if response_text.strip():
+                    await self.vector_store.save_to_cache(
+                        query_vector=query_vec,
+                        response_text=response_text,
+                        user_id=user_id,
+                        group_ids=group_ids,
+                    )
 
                 source_documents = []
                 for res in ranked_results:

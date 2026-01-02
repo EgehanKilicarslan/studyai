@@ -20,8 +20,8 @@ type ChatRepository interface {
 	// Session operations
 	CreateSession(session *models.ChatSession) error
 	GetSession(sessionID uuid.UUID) (*models.ChatSession, error)
-	GetUserSessions(userID uint, organizationID uint, limit int) ([]models.ChatSession, error)
-	GetOrCreateSession(sessionID uuid.UUID, userID uint, organizationID uint) (*models.ChatSession, bool, error)
+	GetUserSessions(userID uint, organizationID *uint, limit int) ([]models.ChatSession, error)
+	GetOrCreateSession(sessionID uuid.UUID, userID uint, organizationID *uint) (*models.ChatSession, bool, error)
 
 	// Message operations
 	CreateMessage(message *models.ChatMessage) error
@@ -57,11 +57,18 @@ func (r *chatRepository) GetSession(sessionID uuid.UUID) (*models.ChatSession, e
 	return &session, nil
 }
 
-// GetUserSessions retrieves sessions for a user in an organization
-func (r *chatRepository) GetUserSessions(userID uint, organizationID uint, limit int) ([]models.ChatSession, error) {
+// GetUserSessions retrieves sessions for a user, optionally filtered by organization
+func (r *chatRepository) GetUserSessions(userID uint, organizationID *uint, limit int) ([]models.ChatSession, error) {
 	var sessions []models.ChatSession
-	query := r.db.Where("user_id = ? AND organization_id = ?", userID, organizationID).
-		Order("created_at DESC")
+	query := r.db.Where("user_id = ?", userID)
+
+	if organizationID != nil {
+		query = query.Where("organization_id = ?", *organizationID)
+	} else {
+		query = query.Where("organization_id IS NULL")
+	}
+
+	query = query.Order("created_at DESC")
 
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -119,7 +126,7 @@ func (r *chatRepository) DeleteSessionMessages(sessionID uuid.UUID) error {
 }
 
 // GetOrCreateSession gets an existing session or creates a new one if it doesn't exist
-func (r *chatRepository) GetOrCreateSession(sessionID uuid.UUID, userID uint, organizationID uint) (*models.ChatSession, bool, error) {
+func (r *chatRepository) GetOrCreateSession(sessionID uuid.UUID, userID uint, organizationID *uint) (*models.ChatSession, bool, error) {
 	// Try to get existing session
 	session, err := r.GetSession(sessionID)
 	if err == nil {

@@ -11,7 +11,7 @@ import (
 type ChatSession struct {
 	ID             uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID         uint           `gorm:"not null;index:idx_user_org_session" json:"user_id"`
-	OrganizationID uint           `gorm:"not null;index:idx_user_org_session" json:"organization_id"`
+	OrganizationID *uint          `gorm:"index:idx_user_org_session" json:"organization_id,omitempty"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
