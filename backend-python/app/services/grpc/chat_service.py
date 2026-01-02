@@ -157,9 +157,10 @@ class ChatService(rs_grpc.ChatServiceServicer):
             # 1) Generate embedding for the query
             query_vec = (await self.embedding_service.generate([request.query]))[0]
 
-            # 2) Check semantic cache for similar queries
+            # 2) Check semantic cache for similar queries (supports all chat scopes)
             cache_hit = await self.vector_store.search_cache(
                 query_vector=query_vec,
+                organization_id=organization_id,
                 user_id=user_id,
                 group_ids=group_ids,
                 threshold=0.95,
@@ -286,12 +287,13 @@ class ChatService(rs_grpc.ChatServiceServicer):
             if not llm_error:
                 processing_time = (time.time() - start_time) * 1000
 
-                # Save successful response to semantic cache
+                # Save successful response to semantic cache (supports all chat scopes)
                 response_text = "".join(full_response)
                 if response_text.strip():
                     await self.vector_store.save_to_cache(
                         query_vector=query_vec,
                         response_text=response_text,
+                        organization_id=organization_id,
                         user_id=user_id,
                         group_ids=group_ids,
                     )

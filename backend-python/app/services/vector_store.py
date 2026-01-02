@@ -341,19 +341,27 @@ class VectorStore:
     async def search_cache(
         self,
         query_vector: List[float],
+        organization_id: Optional[int] = None,
         user_id: Optional[int] = None,
         group_ids: Optional[List[int]] = None,
         threshold: float = 0.95,
     ) -> Optional[CacheHit]:
         """
-        Search for a cached response matching the query.
+        Search for a cached response matching the query with tenant isolation.
 
-        Cache isolation is based on:
+        Supports three chat scopes:
+        1. User scope: user_id only (personal queries, no org/groups)
+        2. Group scope (no org): group_ids without organization_id
+        3. Group under organization: organization_id + group_ids
+
+        Cache isolation is enforced by:
+        - organization_id: If provided, always filter by it for multi-tenant isolation
         - group_ids: If provided, cache is scoped to those groups
-        - user_id: If no groups, cache is scoped to the user's personal queries
+        - user_id: If no groups, cache is scoped to user's personal queries
 
         Args:
             query_vector: The embedding vector of the query to search for.
+            organization_id: The organization ID for multi-tenant isolation (optional).
             user_id: The user ID for personal cache isolation.
             group_ids: The group IDs for group-level cache isolation.
             threshold: Minimum similarity score to consider a cache hit (default: 0.95).
@@ -362,11 +370,20 @@ class VectorStore:
             CacheHit if a sufficiently similar cached response is found, None otherwise.
         """
         try:
-            # Build filter based on context
+            # Build filter based on context - need at least one identifier
             filter_conditions: list[models.Condition] = []
 
+            # Scope 3: Group under organization - filter by org_id
+            if organization_id is not None:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="organization_id",
+                        match=models.MatchValue(value=organization_id),
+                    )
+                )
+
             if group_ids:
-                # Group-scoped cache
+                # Scope 2 & 3: Group-scoped cache
                 filter_conditions.append(
                     models.FieldCondition(
                         key="group_ids",
@@ -374,7 +391,7 @@ class VectorStore:
                     )
                 )
             elif user_id is not None:
-                # User-scoped cache (personal queries)
+                # Scope 1: User-scoped cache (personal queries)
                 filter_conditions.append(
                     models.FieldCondition(
                         key="user_id",
@@ -382,7 +399,8 @@ class VectorStore:
                     )
                 )
             else:
-                # No context, skip cache
+                # No valid scope context - skip cache
+                self.logger.debug("[VectorStore] No cache scope context provided, skipping cache")
                 return None
 
             cache_filter = models.Filter(must=filter_conditions)
@@ -404,7 +422,7 @@ class VectorStore:
 
                 self.logger.info(
                     f"[VectorStore] Cache HIT (score={hit.score:.4f}, id={hit.id}, "
-                    f"user={user_id}, groups={group_ids})"
+                    f"org={organization_id}, user={user_id}, groups={group_ids})"
                 )
 
                 return CacheHit(
@@ -413,7 +431,9 @@ class VectorStore:
                     cache_id=str(hit.id),
                 )
 
-            self.logger.debug(f"[VectorStore] Cache MISS for user={user_id}, groups={group_ids}")
+            self.logger.debug(
+                f"[VectorStore] Cache MISS for org={organization_id}, user={user_id}, groups={group_ids}"
+            )
             return None
 
         except Exception as e:
@@ -424,19 +444,22 @@ class VectorStore:
         self,
         query_vector: List[float],
         response_text: str,
+        organization_id: Optional[int] = None,
         user_id: Optional[int] = None,
         group_ids: Optional[List[int]] = None,
     ) -> Optional[str]:
         """
-        Save a response to the semantic cache with context metadata.
+        Save a response to the semantic cache with tenant metadata.
 
-        Cache is scoped by:
-        - group_ids: For group-level queries
-        - user_id: For personal queries (when no groups)
+        Supports three chat scopes:
+        1. User scope: user_id only (personal queries, no org/groups)
+        2. Group scope (no org): group_ids without organization_id
+        3. Group under organization: organization_id + group_ids
 
         Args:
             query_vector: The embedding vector of the query.
             response_text: The LLM-generated response to cache.
+            organization_id: The organization ID for multi-tenant isolation (optional).
             user_id: The user ID for personal cache isolation.
             group_ids: The group IDs for group-level cache isolation.
 
@@ -444,15 +467,26 @@ class VectorStore:
             The cache entry ID if successful, None otherwise.
         """
         try:
+            # Need at least one scope identifier to save
+            if not group_ids and user_id is None:
+                self.logger.debug("[VectorStore] No cache scope context, skipping cache save")
+                return None
+
             cache_id = str(uuid.uuid4())
 
             payload: dict = {
                 "response_text": response_text,
             }
 
-            # Add context for cache isolation
+            # Store organization_id if present (Scope 3)
+            if organization_id is not None:
+                payload["organization_id"] = organization_id
+
+            # Store group_ids if present (Scope 2 & 3)
             if group_ids:
                 payload["group_ids"] = group_ids
+
+            # Store user_id if present (Scope 1)
             if user_id is not None:
                 payload["user_id"] = user_id
 
@@ -468,7 +502,8 @@ class VectorStore:
             )
 
             self.logger.info(
-                f"[VectorStore] Saved cache entry (id={cache_id}, user={user_id}, groups={group_ids})"
+                f"[VectorStore] Saved cache entry (id={cache_id}, org={organization_id}, "
+                f"user={user_id}, groups={group_ids})"
             )
 
             return cache_id
