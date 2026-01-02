@@ -170,13 +170,15 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
                 f"[KnowledgeBaseService] ✅ Deleted vectors for document {document_id}"
             )
 
-            # 2) Delete chunks from PostgreSQL (optional - Go may handle this)
-            # For now, we keep chunks in case Go needs them for other purposes
-            # await self.document_service.delete_chunks_by_document_id(document_id)
+            # 2) Delete chunks from PostgreSQL
+            deleted_count = await self.chunk_service.delete_chunks_by_document_id(document_id)
+            self.logger.info(
+                f"[KnowledgeBaseService] ✅ Deleted {deleted_count} chunks for document {document_id}"
+            )
 
             return rs.DeleteDocumentResponse(
                 status="success",
-                message=f"Document {document_id} vectors deleted from vector store.",
+                message=f"Document {document_id} deleted from vector store and {deleted_count} chunks removed.",
             )
 
         except Exception as e:
