@@ -85,7 +85,47 @@ func (s *documentService) CreateDocument(orgID *uint, groupID *uint, ownerID uin
 		}
 
 		limits := org.GetPlanLimits()
-		_ = limits // TODO: Add actual quota checks
+
+		// Check document count limit before processing the file
+		if limits.MaxDocuments > 0 {
+			docCount, err := s.docRepo.CountByOrganization(*orgID)
+			if err != nil {
+				s.logger.Error("❌ [DocumentService] Failed to count documents", "org_id", *orgID, "error", err)
+				return nil, fmt.Errorf("failed to count documents: %w", err)
+			}
+
+			if docCount >= int64(limits.MaxDocuments) {
+				s.logger.Warn("⚠️ [DocumentService] Document quota exceeded",
+					"current_count", docCount,
+					"max_documents", limits.MaxDocuments,
+					"plan", org.PlanTier,
+				)
+				return nil, config.NewQuotaError(
+					"documents",
+					docCount,
+					int64(limits.MaxDocuments),
+					fmt.Sprintf("document limit reached: %d/%d documents (plan: %s)",
+						docCount, limits.MaxDocuments, org.PlanTier),
+				)
+			}
+		}
+
+		// Check storage quota before processing (using org's current usage)
+		// Note: This is a pre-check; exact file size will be validated after writing
+		if limits.MaxStorageBytes > 0 && org.UsedStorageBytes >= limits.MaxStorageBytes {
+			s.logger.Warn("⚠️ [DocumentService] Storage quota already exceeded",
+				"used_storage", org.UsedStorageBytes,
+				"max_storage", limits.MaxStorageBytes,
+				"plan", org.PlanTier,
+			)
+			return nil, config.NewQuotaError(
+				"storage",
+				org.UsedStorageBytes,
+				limits.MaxStorageBytes,
+				fmt.Sprintf("storage quota exceeded: %d/%d bytes (plan: %s)",
+					org.UsedStorageBytes, limits.MaxStorageBytes, org.PlanTier),
+			)
+		}
 	}
 
 	// Generate a new document ID

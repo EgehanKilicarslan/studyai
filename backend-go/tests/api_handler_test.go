@@ -216,7 +216,7 @@ func TestUploadHandler(t *testing.T) {
 					FilePath:       "/tmp/test.txt",
 					OrganizationID: &orgID,
 					OwnerID:        1,
-					Status:         models.DocumentStatusCompleted,
+					Status:         models.DocumentStatusProcessing,
 					ChunksCount:    10,
 				}
 				docService.On("CreateDocument", &orgID, (*uint)(nil), uint(1), "test.txt", mock.Anything, mock.Anything).Return(doc, nil)
@@ -225,7 +225,7 @@ func TestUploadHandler(t *testing.T) {
 					Message:     "Document processed",
 					ChunksCount: 10,
 				}, nil)
-				docService.On("UpdateDocumentStatus", docID, models.DocumentStatusCompleted, int(10), (*string)(nil)).Return(nil)
+				docService.On("UpdateDocumentStatus", docID, models.DocumentStatusProcessing, int(10), (*string)(nil)).Return(nil)
 				docService.On("GetDocument", docID).Return(updatedDoc, nil)
 			},
 			expectedStatus: 201, // Created
@@ -264,7 +264,7 @@ func TestUploadHandler(t *testing.T) {
 					FilePath:       "/tmp/test.txt",
 					OrganizationID: nil,
 					OwnerID:        1,
-					Status:         models.DocumentStatusCompleted,
+					Status:         models.DocumentStatusProcessing,
 					ChunksCount:    5,
 				}
 				docService.On("CreateDocument", (*uint)(nil), (*uint)(nil), uint(1), "test.txt", mock.Anything, mock.Anything).Return(doc, nil)
@@ -273,7 +273,7 @@ func TestUploadHandler(t *testing.T) {
 					Message:     "Document processed",
 					ChunksCount: 5,
 				}, nil)
-				docService.On("UpdateDocumentStatus", docID, models.DocumentStatusCompleted, int(5), (*string)(nil)).Return(nil)
+				docService.On("UpdateDocumentStatus", docID, models.DocumentStatusProcessing, int(5), (*string)(nil)).Return(nil)
 				docService.On("GetDocument", docID).Return(updatedDoc, nil)
 			},
 			expectedStatus: 201, // User-scoped documents are valid

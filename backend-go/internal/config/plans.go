@@ -24,6 +24,7 @@ const (
 type PlanLimits struct {
 	MaxMembers           int   // Maximum members in an organization
 	MaxGroups            int   // Maximum groups in an organization
+	MaxDocuments         int   // Maximum documents in an organization
 	MaxStorageBytes      int64 // Global organization storage limit
 	MaxFileSize          int64 // Per-upload file size limit
 	DailyMessagesPerUser int   // Rate limit per user per day
@@ -34,6 +35,7 @@ var DefaultPlanLimits = map[PlanTier]PlanLimits{
 	PlanFree: {
 		MaxMembers:           5,
 		MaxGroups:            1,
+		MaxDocuments:         50,
 		MaxStorageBytes:      500 * 1024 * 1024, // 500 MB
 		MaxFileSize:          10 * 1024 * 1024,  // 10 MB
 		DailyMessagesPerUser: 50,
@@ -41,6 +43,7 @@ var DefaultPlanLimits = map[PlanTier]PlanLimits{
 	PlanPro: {
 		MaxMembers:           50,
 		MaxGroups:            20,
+		MaxDocuments:         500,
 		MaxStorageBytes:      10 * 1024 * 1024 * 1024, // 10 GB
 		MaxFileSize:          50 * 1024 * 1024,        // 50 MB
 		DailyMessagesPerUser: 500,
@@ -48,6 +51,7 @@ var DefaultPlanLimits = map[PlanTier]PlanLimits{
 	PlanEnterprise: {
 		MaxMembers:           -1, // Unlimited (-1 means no limit)
 		MaxGroups:            -1,
+		MaxDocuments:         -1,
 		MaxStorageBytes:      -1,
 		MaxFileSize:          100 * 1024 * 1024, // 100 MB
 		DailyMessagesPerUser: -1,

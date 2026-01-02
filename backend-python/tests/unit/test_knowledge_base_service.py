@@ -53,6 +53,7 @@ def mock_chunk_service():
     mock_chunk2 = Mock()
     mock_chunk2.id = "chunk-uuid-2"
     chunk_service.store_chunks = AsyncMock(return_value=[mock_chunk1, mock_chunk2])
+    chunk_service.delete_chunks_by_document_id = AsyncMock(return_value=5)
     return chunk_service
 
 

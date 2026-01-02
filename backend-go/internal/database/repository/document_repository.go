@@ -26,6 +26,7 @@ type DocumentRepository interface {
 	ListByGroup(groupID uint, offset, limit int) ([]models.Document, int64, error)
 	ListByOwner(ownerID uint, offset, limit int) ([]models.Document, int64, error)
 	FindByHash(orgID uint, fileHash string) (*models.Document, error)
+	CountByOrganization(orgID uint) (int64, error)
 
 	// Permission check helpers
 	IsOwner(docID uuid.UUID, userID uint) (bool, error)
@@ -203,6 +204,12 @@ func (r *documentRepository) FindByHash(orgID uint, fileHash string) (*models.Do
 		return nil, err
 	}
 	return &doc, nil
+}
+
+func (r *documentRepository) CountByOrganization(orgID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Document{}).Where("organization_id = ?", orgID).Count(&count).Error
+	return count, err
 }
 
 // ==================== Permission Helpers ====================
