@@ -410,6 +410,11 @@ func (m *MockGroupRepository) ListMembers(groupID uint, offset, limit int) ([]mo
 	return args.Get(0).([]models.GroupMember), args.Get(1).(int64), args.Error(2)
 }
 
+func (m *MockGroupRepository) CountMembers(groupID uint) (int64, error) {
+	args := m.Called(groupID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *MockGroupRepository) GetUserGroups(userID uint) ([]models.GroupMember, error) {
 	args := m.Called(userID)
 	if args.Get(0) == nil {
@@ -432,6 +437,16 @@ func (m *MockGroupRepository) GetUserPermissionsInGroup(userID, groupID uint) ([
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockGroupRepository) IncrementStorage(groupID uint, bytes int64) error {
+	args := m.Called(groupID, bytes)
+	return args.Error(0)
+}
+
+func (m *MockGroupRepository) DecrementStorage(groupID uint, bytes int64) error {
+	args := m.Called(groupID, bytes)
+	return args.Error(0)
 }
 
 // ==================== MOCK AUTH SERVICE ====================

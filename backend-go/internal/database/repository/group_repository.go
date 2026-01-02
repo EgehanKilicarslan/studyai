@@ -35,11 +35,16 @@ type GroupRepository interface {
 	UpdateMemberRole(userID, groupID, newRoleID uint) error
 	RemoveMember(userID, groupID uint) error
 	ListMembers(groupID uint, offset, limit int) ([]models.GroupMember, int64, error)
+	CountMembers(groupID uint) (int64, error)
 	GetUserGroups(userID uint) ([]models.GroupMember, error)
 	GetUserGroupsInOrganization(userID, orgID uint) ([]uint, error) // Returns group IDs
 
 	// Permission helpers
 	GetUserPermissionsInGroup(userID, groupID uint) ([]string, error)
+
+	// Storage operations (for standalone groups)
+	IncrementStorage(groupID uint, bytes int64) error
+	DecrementStorage(groupID uint, bytes int64) error
 }
 
 type groupRepository struct {
@@ -264,6 +269,14 @@ func (r *groupRepository) ListMembers(groupID uint, offset, limit int) ([]models
 	return members, total, err
 }
 
+func (r *groupRepository) CountMembers(groupID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.GroupMember{}).
+		Where("group_id = ?", groupID).
+		Count(&count).Error
+	return count, err
+}
+
 func (r *groupRepository) GetUserGroups(userID uint) ([]models.GroupMember, error) {
 	var memberships []models.GroupMember
 	err := r.db.Where("user_id = ?", userID).
@@ -297,6 +310,35 @@ func (r *groupRepository) GetUserPermissionsInGroup(userID, groupID uint) ([]str
 	}
 
 	return []string(role.Permissions), nil
+}
+
+// ==================== Storage Operations (for standalone groups) ====================
+
+func (r *groupRepository) IncrementStorage(groupID uint, bytes int64) error {
+	result := r.db.Model(&models.Group{}).
+		Where("id = ?", groupID).
+		Update("used_storage_bytes", gorm.Expr("used_storage_bytes + ?", bytes))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrGroupNotFound
+	}
+	return nil
+}
+
+func (r *groupRepository) DecrementStorage(groupID uint, bytes int64) error {
+	// Use GREATEST to prevent going below 0
+	result := r.db.Model(&models.Group{}).
+		Where("id = ?", groupID).
+		Update("used_storage_bytes", gorm.Expr("GREATEST(used_storage_bytes - ?, 0)", bytes))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrGroupNotFound
+	}
+	return nil
 }
 
 // Repository errors for groups

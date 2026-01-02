@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/models"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/repository"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/service"
@@ -30,7 +31,7 @@ func NewGroupHandler(groupService service.GroupService, logger *slog.Logger) *Gr
 // ==================== Request/Response DTOs ====================
 
 type CreateGroupRequest struct {
-	OrganizationID uint   `json:"organization_id" binding:"required"`
+	OrganizationID *uint  `json:"organization_id,omitempty"` // nullable for standalone groups
 	Name           string `json:"name" binding:"required,min=1,max=255"`
 	Description    string `json:"description"`
 }
@@ -59,11 +60,24 @@ type UpdateMemberRoleRequest struct {
 	RoleID uint `json:"role_id" binding:"required"`
 }
 
+type UpdateGroupTierRequest struct {
+	PlanTier      string `json:"plan_tier" binding:"required"`
+	BillingStatus string `json:"billing_status,omitempty"`
+}
+
+type UpdateGroupBillingStatusRequest struct {
+	Status string `json:"status" binding:"required"`
+}
+
 type GroupResponse struct {
 	ID             uint   `json:"id"`
 	OrganizationID *uint  `json:"organization_id,omitempty"` // nullable for standalone groups
 	Name           string `json:"name"`
 	Description    string `json:"description,omitempty"`
+	// Billing fields (only populated for standalone groups)
+	PlanTier         string `json:"plan_tier,omitempty"`
+	BillingStatus    string `json:"billing_status,omitempty"`
+	UsedStorageBytes int64  `json:"used_storage_bytes,omitempty"`
 }
 
 type RoleResponse struct {
@@ -92,6 +106,8 @@ type PaginatedResponse struct {
 // ==================== Group Handlers ====================
 
 // CreateGroup handles POST /groups
+// If organization_id is provided, creates a group within that organization.
+// If organization_id is omitted/null, creates a standalone group with a FREE plan tier.
 func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	var req CreateGroupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -106,7 +122,17 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 		return
 	}
 
-	group, err := h.groupService.CreateGroup(req.OrganizationID, req.Name, req.Description, userID)
+	var group *models.Group
+	var err error
+
+	if req.OrganizationID != nil {
+		// Create group within an organization
+		group, err = h.groupService.CreateGroup(*req.OrganizationID, req.Name, req.Description, userID)
+	} else {
+		// Create standalone group with default FREE tier
+		group, err = h.groupService.CreateStandaloneGroup(req.Name, req.Description, userID)
+	}
+
 	if err != nil {
 		h.handleServiceError(c, err)
 		return
@@ -178,6 +204,125 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Group deleted successfully"})
+}
+
+// UpdateGroupTier handles PUT /groups/:group_id/tier
+// Updates the plan tier and billing status for standalone groups only.
+// Returns 400 Bad Request if the group belongs to an organization.
+func (h *GroupHandler) UpdateGroupTier(c *gin.Context) {
+	groupID, err := h.parseGroupID(c)
+	if err != nil {
+		return
+	}
+
+	var req UpdateGroupTierRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("❌ [GroupHandler] Invalid update group tier request", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		return
+	}
+
+	userID := h.getUserIDFromContext(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// Parse plan tier
+	planTier := config.PlanTier(req.PlanTier)
+
+	// Default billing status to active if not provided
+	billingStatus := config.BillingActive
+	if req.BillingStatus != "" {
+		billingStatus = config.BillingStatus(req.BillingStatus)
+	}
+
+	group, err := h.groupService.UpdateStandaloneGroupTier(userID, groupID, planTier, billingStatus)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, h.mapGroupToResponse(group))
+}
+
+// UpdateGroupBillingStatus handles PUT /admin/groups/:group_id/billing
+// Updates the billing status for standalone groups only.
+// Returns 400 Bad Request if the group belongs to an organization.
+func (h *GroupHandler) UpdateGroupBillingStatus(c *gin.Context) {
+	groupID, err := h.parseGroupID(c)
+	if err != nil {
+		return
+	}
+
+	var req UpdateGroupBillingStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("❌ [GroupHandler] Invalid update group billing status request", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		return
+	}
+
+	// Validate billing status value
+	status := config.BillingStatus(req.Status)
+	if !isValidBillingStatus(status) {
+		h.logger.Error("❌ [GroupHandler] Invalid billing status value", "status", req.Status)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":          "Invalid billing status value",
+			"valid_statuses": []string{string(config.BillingActive), string(config.BillingPastDue), string(config.BillingSuspended), string(config.BillingCanceled), string(config.BillingTrialing)},
+		})
+		return
+	}
+
+	h.logger.Info("📊 [GroupHandler] Updating standalone group billing status",
+		"group_id", groupID,
+		"new_status", status,
+	)
+
+	if err := h.groupService.UpdateStandaloneGroupBillingStatus(groupID, status); err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "Group billing status updated successfully",
+		"group_id":       groupID,
+		"billing_status": status,
+	})
+}
+
+// GetGroupQuota handles GET /admin/groups/:group_id/quota
+// Returns quota information for standalone groups only.
+// Returns 400 Bad Request if the group belongs to an organization.
+func (h *GroupHandler) GetGroupQuota(c *gin.Context) {
+	groupID, err := h.parseGroupID(c)
+	if err != nil {
+		return
+	}
+
+	quota, err := h.groupService.GetStandaloneGroupQuota(groupID)
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"group": gin.H{
+			"id":             quota.Group.ID,
+			"name":           quota.Group.Name,
+			"plan_tier":      quota.Group.PlanTier,
+			"billing_status": quota.Group.BillingStatus,
+		},
+		"usage": gin.H{
+			"members":       quota.Usage.Members,
+			"storage_bytes": quota.Usage.StorageBytes,
+		},
+		"limits": gin.H{
+			"max_members":             quota.Limits.MaxMembers,
+			"max_storage_bytes":       quota.Limits.MaxStorageBytes,
+			"max_file_size":           quota.Limits.MaxFileSize,
+			"daily_messages_per_user": quota.Limits.DailyMessagesPerUser,
+		},
+	})
 }
 
 // ListGroupsByOrganization handles GET /organizations/:org_id/groups
@@ -500,6 +645,12 @@ func (h *GroupHandler) mapGroupToResponse(g *models.Group) GroupResponse {
 	if g.Description != nil {
 		resp.Description = *g.Description
 	}
+	// Include billing fields for standalone groups
+	if g.IsStandalone() {
+		resp.PlanTier = string(g.PlanTier)
+		resp.BillingStatus = string(g.BillingStatus)
+		resp.UsedStorageBytes = g.UsedStorageBytes
+	}
 	return resp
 }
 
@@ -598,6 +749,10 @@ func (h *GroupHandler) handleServiceError(c *gin.Context, err error) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot modify the owner's role"})
 	case errors.Is(err, service.ErrCannotRemoveOwner):
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot remove the group owner"})
+	case errors.Is(err, service.ErrOrganizationGroupBilling):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This group is managed by an organization. Billing must be handled at the organization level."})
+	case errors.Is(err, service.ErrInvalidPlanTier):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid plan tier. Valid values are: FREE, PRO, ENTERPRISE"})
 	case errors.Is(err, repository.ErrGroupNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
 	case errors.Is(err, repository.ErrRoleNotFound):

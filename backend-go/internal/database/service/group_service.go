@@ -29,6 +29,7 @@ const (
 type GroupService interface {
 	// Group operations
 	CreateGroup(orgID uint, name, description string, creatorUserID uint) (*models.Group, error)
+	CreateStandaloneGroup(name, description string, creatorUserID uint) (*models.Group, error)
 	GetGroup(groupID uint) (*models.Group, error)
 	UpdateGroup(requesterID, groupID uint, name, description string) (*models.Group, error)
 	DeleteGroup(requesterID, groupID uint) error
@@ -50,6 +51,26 @@ type GroupService interface {
 	// Permission checks
 	HasPermission(userID, groupID uint, permission string) (bool, error)
 	GetUserPermissions(userID, groupID uint) ([]string, error)
+
+	// Billing/Limits checks for standalone groups
+	GetGroupLimits(groupID uint) (*config.PlanLimits, error)
+	CheckStorageLimit(groupID uint, additionalBytes int64) error
+	UpdateStandaloneGroupTier(requesterID, groupID uint, planTier config.PlanTier, billingStatus config.BillingStatus) (*models.Group, error)
+	UpdateStandaloneGroupBillingStatus(groupID uint, billingStatus config.BillingStatus) error
+	GetStandaloneGroupQuota(groupID uint) (*StandaloneGroupQuota, error)
+}
+
+// StandaloneGroupQuota represents quota information for a standalone group
+type StandaloneGroupQuota struct {
+	Group  *models.Group
+	Usage  GroupUsage
+	Limits config.PlanLimits
+}
+
+// GroupUsage represents current resource usage for a group
+type GroupUsage struct {
+	Members      int64
+	StorageBytes int64
 }
 
 type groupService struct {
@@ -72,6 +93,24 @@ func NewGroupService(
 		userRepo:  userRepo,
 		logger:    logger,
 	}
+}
+
+// getGroupLimits is a private helper that returns the applicable plan limits for a group.
+// - If the group belongs to an organization, it returns the organization's plan limits.
+// - If the group is standalone, it returns limits based on the group's own PlanTier.
+func (s *groupService) getGroupLimits(group *models.Group) (config.PlanLimits, error) {
+	if group.OrganizationID != nil {
+		// Organization group: use organization's plan limits
+		org, err := s.orgRepo.FindByID(*group.OrganizationID)
+		if err != nil {
+			s.logger.Error("❌ [GroupService] Failed to fetch organization for limits", "org_id", *group.OrganizationID, "error", err)
+			return config.PlanLimits{}, err
+		}
+		return org.GetPlanLimits(), nil
+	}
+
+	// Standalone group: use the group's own plan tier
+	return group.GetPlanLimits(), nil
 }
 
 // ==================== Group Operations ====================
@@ -364,6 +403,55 @@ func (s *groupService) AddMember(requesterID, groupID, userID, roleID uint) (*mo
 		}
 	}
 
+	// Fetch the group to check limits
+	group, err := s.groupRepo.FindByID(groupID)
+	if err != nil {
+		s.logger.Error("❌ [GroupService] Failed to fetch group", "group_id", groupID, "error", err)
+		return nil, err
+	}
+
+	// Check member quota based on group type (org-based or standalone)
+	limits, err := s.getGroupLimits(group)
+	if err != nil {
+		return nil, err
+	}
+
+	if limits.MaxMembers >= 0 { // -1 means unlimited
+		currentCount, err := s.groupRepo.CountMembers(groupID)
+		if err != nil {
+			s.logger.Error("❌ [GroupService] Failed to count members", "group_id", groupID, "error", err)
+			return nil, err
+		}
+
+		if int(currentCount) >= limits.MaxMembers {
+			var planSource string
+			var planTier config.PlanTier
+			if group.OrganizationID != nil {
+				org, _ := s.orgRepo.FindByID(*group.OrganizationID)
+				if org != nil {
+					planTier = org.PlanTier
+					planSource = "organization's"
+				}
+			} else {
+				planTier = group.PlanTier
+				planSource = "group's"
+			}
+
+			s.logger.Warn("⚠️ [GroupService] Member quota exceeded",
+				"group_id", groupID,
+				"current", currentCount,
+				"limit", limits.MaxMembers,
+				"plan_tier", planTier,
+			)
+			return nil, config.NewQuotaError(
+				"members",
+				int64(limits.MaxMembers),
+				currentCount,
+				fmt.Sprintf("Member limit reached. Your %s %s plan allows %d members per group.", planSource, planTier, limits.MaxMembers),
+			)
+		}
+	}
+
 	// Verify user exists
 	if _, err := s.userRepo.FindByID(userID); err != nil {
 		return nil, repository.ErrUserNotFound
@@ -552,6 +640,232 @@ func (s *groupService) validatePermissionAssignment(requesterID, groupID uint, p
 	return nil
 }
 
+// ==================== Standalone Group Operations ====================
+
+// CreateStandaloneGroup creates a new standalone group (not belonging to any organization)
+// with a default FREE plan tier
+func (s *groupService) CreateStandaloneGroup(name, description string, creatorUserID uint) (*models.Group, error) {
+	s.logger.Info("📁 [GroupService] Creating standalone group", "name", name, "creator", creatorUserID)
+
+	// Create the standalone group with default FREE plan
+	group := &models.Group{
+		OrganizationID:   nil, // Standalone group
+		Name:             name,
+		Description:      &description,
+		PlanTier:         config.PlanFree,
+		BillingStatus:    config.BillingActive,
+		UsedStorageBytes: 0,
+	}
+
+	if err := s.groupRepo.Create(group); err != nil {
+		s.logger.Error("❌ [GroupService] Failed to create standalone group", "error", err)
+		return nil, err
+	}
+
+	// Create default system roles for the group
+	ownerRole := &models.GroupRole{
+		GroupID:     group.ID,
+		Name:        SystemRoleOwner,
+		Permissions: pq.StringArray{models.PermGroupAdmin, models.PermDocRead, models.PermDocUpload, models.PermDocDelete, models.PermDocEdit, models.PermChatAccess, models.PermMemberAdd, models.PermMemberRemove, models.PermRoleManage},
+	}
+	if err := s.groupRepo.CreateRole(ownerRole); err != nil {
+		s.logger.Error("❌ [GroupService] Failed to create owner role", "error", err)
+		return nil, err
+	}
+
+	adminRole := &models.GroupRole{
+		GroupID:     group.ID,
+		Name:        SystemRoleAdmin,
+		Permissions: pq.StringArray{models.PermDocRead, models.PermDocUpload, models.PermDocDelete, models.PermDocEdit, models.PermChatAccess, models.PermMemberAdd, models.PermMemberRemove, models.PermRoleManage},
+	}
+	if err := s.groupRepo.CreateRole(adminRole); err != nil {
+		s.logger.Error("❌ [GroupService] Failed to create admin role", "error", err)
+		return nil, err
+	}
+
+	// Add creator as owner
+	member := &models.GroupMember{
+		UserID:  creatorUserID,
+		GroupID: group.ID,
+		RoleID:  ownerRole.ID,
+	}
+	if err := s.groupRepo.AddMember(member); err != nil {
+		s.logger.Error("❌ [GroupService] Failed to add creator as owner", "error", err)
+		return nil, err
+	}
+
+	s.logger.Info("✅ [GroupService] Standalone group created successfully", "group_id", group.ID, "plan_tier", group.PlanTier)
+	return group, nil
+}
+
+// ==================== Billing/Limits Helpers ====================
+
+// GetGroupLimits returns the plan limits for a group.
+// For standalone groups, it returns the group's own plan limits.
+// For organization groups, it returns nil (organization limits should be used instead).
+func (s *groupService) GetGroupLimits(groupID uint) (*config.PlanLimits, error) {
+	group, err := s.groupRepo.FindByID(groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !group.IsStandalone() {
+		// For organization groups, return nil - organization limits should be checked
+		return nil, nil
+	}
+
+	limits := group.GetPlanLimits()
+	return &limits, nil
+}
+
+// CheckStorageLimit verifies if a standalone group has enough storage capacity
+// for an additional file of the given size. Returns a QuotaError if the limit
+// would be exceeded.
+func (s *groupService) CheckStorageLimit(groupID uint, additionalBytes int64) error {
+	group, err := s.groupRepo.FindByID(groupID)
+	if err != nil {
+		return err
+	}
+
+	if !group.IsStandalone() {
+		// For organization groups, storage is managed at the organization level
+		return nil
+	}
+
+	limits := group.GetPlanLimits()
+
+	// Check if unlimited storage (-1)
+	if limits.MaxStorageBytes < 0 {
+		return nil
+	}
+
+	newTotal := group.UsedStorageBytes + additionalBytes
+	if newTotal > limits.MaxStorageBytes {
+		s.logger.Warn("⚠️ [GroupService] Storage quota exceeded for standalone group",
+			"group_id", groupID,
+			"current", group.UsedStorageBytes,
+			"additional", additionalBytes,
+			"limit", limits.MaxStorageBytes,
+		)
+		return config.NewQuotaError(
+			"storage",
+			limits.MaxStorageBytes,
+			group.UsedStorageBytes,
+			fmt.Sprintf("Storage limit reached. Your %s plan allows %d bytes.", group.PlanTier, limits.MaxStorageBytes),
+		)
+	}
+
+	return nil
+}
+
+// UpdateStandaloneGroupTier updates the plan tier and billing status for a standalone group.
+// Returns an error if the group belongs to an organization (billing must be handled at org level).
+func (s *groupService) UpdateStandaloneGroupTier(requesterID, groupID uint, planTier config.PlanTier, billingStatus config.BillingStatus) (*models.Group, error) {
+	s.logger.Info("💳 [GroupService] Updating standalone group tier", "group_id", groupID, "plan_tier", planTier, "requester", requesterID)
+
+	// Check permission - only owner or admin can update tier
+	if hasAdmin, _ := s.HasPermission(requesterID, groupID, PermGroupAdmin); !hasAdmin {
+		return nil, ErrPermissionDenied
+	}
+
+	// Fetch the group
+	group, err := s.groupRepo.FindByID(groupID)
+	if err != nil {
+		s.logger.Error("❌ [GroupService] Failed to fetch group", "group_id", groupID, "error", err)
+		return nil, err
+	}
+
+	// Guard clause: reject if this is an organization group
+	if !group.IsStandalone() {
+		s.logger.Warn("⚠️ [GroupService] Attempted to update tier of organization group", "group_id", groupID, "org_id", *group.OrganizationID)
+		return nil, ErrOrganizationGroupBilling
+	}
+
+	// Validate the plan tier
+	if !config.IsValidTier(planTier) {
+		return nil, ErrInvalidPlanTier
+	}
+
+	// Update the group's billing fields
+	group.PlanTier = planTier
+	group.BillingStatus = billingStatus
+
+	if err := s.groupRepo.Update(group); err != nil {
+		s.logger.Error("❌ [GroupService] Failed to update group tier", "group_id", groupID, "error", err)
+		return nil, err
+	}
+
+	s.logger.Info("✅ [GroupService] Standalone group tier updated successfully", "group_id", groupID, "plan_tier", planTier, "billing_status", billingStatus)
+	return group, nil
+}
+
+// UpdateStandaloneGroupBillingStatus updates the billing status for a standalone group.
+// Returns an error if the group belongs to an organization.
+func (s *groupService) UpdateStandaloneGroupBillingStatus(groupID uint, billingStatus config.BillingStatus) error {
+	s.logger.Info("💳 [GroupService] Updating standalone group billing status", "group_id", groupID, "billing_status", billingStatus)
+
+	// Fetch the group
+	group, err := s.groupRepo.FindByID(groupID)
+	if err != nil {
+		s.logger.Error("❌ [GroupService] Failed to fetch group", "group_id", groupID, "error", err)
+		return err
+	}
+
+	// Guard clause: reject if this is an organization group
+	if !group.IsStandalone() {
+		s.logger.Warn("⚠️ [GroupService] Attempted to update billing status of organization group", "group_id", groupID, "org_id", *group.OrganizationID)
+		return ErrOrganizationGroupBilling
+	}
+
+	// Update the billing status
+	group.BillingStatus = billingStatus
+
+	if err := s.groupRepo.Update(group); err != nil {
+		s.logger.Error("❌ [GroupService] Failed to update group billing status", "group_id", groupID, "error", err)
+		return err
+	}
+
+	s.logger.Info("✅ [GroupService] Standalone group billing status updated successfully", "group_id", groupID, "billing_status", billingStatus)
+	return nil
+}
+
+// GetStandaloneGroupQuota returns quota information for a standalone group.
+// Returns an error if the group belongs to an organization.
+func (s *groupService) GetStandaloneGroupQuota(groupID uint) (*StandaloneGroupQuota, error) {
+	s.logger.Info("📊 [GroupService] Getting standalone group quota", "group_id", groupID)
+
+	// Fetch the group
+	group, err := s.groupRepo.FindByID(groupID)
+	if err != nil {
+		s.logger.Error("❌ [GroupService] Failed to fetch group", "group_id", groupID, "error", err)
+		return nil, err
+	}
+
+	// Guard clause: reject if this is an organization group
+	if !group.IsStandalone() {
+		s.logger.Warn("⚠️ [GroupService] Attempted to get quota of organization group", "group_id", groupID, "org_id", *group.OrganizationID)
+		return nil, ErrOrganizationGroupBilling
+	}
+
+	// Get member count
+	memberCount, err := s.groupRepo.CountMembers(groupID)
+	if err != nil {
+		s.logger.Error("❌ [GroupService] Failed to count members", "group_id", groupID, "error", err)
+		memberCount = 0
+	}
+
+	limits := group.GetPlanLimits()
+
+	return &StandaloneGroupQuota{
+		Group: group,
+		Usage: GroupUsage{
+			Members:      memberCount,
+			StorageBytes: group.UsedStorageBytes,
+		},
+		Limits: limits,
+	}, nil
+}
+
 // Service errors
 var (
 	ErrPermissionDenied          = errors.New("permission denied")
@@ -562,4 +876,6 @@ var (
 	ErrCannotEscalatePermissions = errors.New("cannot assign permissions higher than your own")
 	ErrCannotModifyOwner         = errors.New("cannot modify the owner's role")
 	ErrCannotRemoveOwner         = errors.New("cannot remove the group owner")
+	ErrOrganizationGroupBilling  = errors.New("this group is managed by an organization. Billing must be handled at the organization level")
+	ErrInvalidPlanTier           = errors.New("invalid plan tier")
 )

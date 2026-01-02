@@ -76,55 +76,96 @@ func (s *documentService) CreateDocument(orgID *uint, groupID *uint, ownerID uin
 		"filename", filename,
 	)
 
-	// Check plan limits only if organization-scoped
+	// Determine storage context: Organization, Standalone Group, or User-scoped
+	var orgLimits *config.PlanLimits
+	var groupLimits *config.PlanLimits
+	var org *models.Organization
+	var group *models.Group
+	var isStandaloneGroup bool
+
+	// Check plan limits based on context
 	if orgID != nil {
-		org, err := s.orgRepo.FindByID(*orgID)
+		// Organization context
+		var err error
+		org, err = s.orgRepo.FindByID(*orgID)
 		if err != nil {
 			s.logger.Error("❌ [DocumentService] Failed to get organization", "org_id", *orgID, "error", err)
 			return nil, fmt.Errorf("failed to get organization: %w", err)
 		}
 
 		limits := org.GetPlanLimits()
+		orgLimits = &limits
 
 		// Check document count limit before processing the file
-		if limits.MaxDocuments > 0 {
+		if orgLimits.MaxDocuments > 0 {
 			docCount, err := s.docRepo.CountByOrganization(*orgID)
 			if err != nil {
 				s.logger.Error("❌ [DocumentService] Failed to count documents", "org_id", *orgID, "error", err)
 				return nil, fmt.Errorf("failed to count documents: %w", err)
 			}
 
-			if docCount >= int64(limits.MaxDocuments) {
+			if docCount >= int64(orgLimits.MaxDocuments) {
 				s.logger.Warn("⚠️ [DocumentService] Document quota exceeded",
 					"current_count", docCount,
-					"max_documents", limits.MaxDocuments,
+					"max_documents", orgLimits.MaxDocuments,
 					"plan", org.PlanTier,
 				)
 				return nil, config.NewQuotaError(
 					"documents",
 					docCount,
-					int64(limits.MaxDocuments),
+					int64(orgLimits.MaxDocuments),
 					fmt.Sprintf("document limit reached: %d/%d documents (plan: %s)",
-						docCount, limits.MaxDocuments, org.PlanTier),
+						docCount, orgLimits.MaxDocuments, org.PlanTier),
 				)
 			}
 		}
 
 		// Check storage quota before processing (using org's current usage)
-		// Note: This is a pre-check; exact file size will be validated after writing
-		if limits.MaxStorageBytes > 0 && org.UsedStorageBytes >= limits.MaxStorageBytes {
+		if orgLimits.MaxStorageBytes > 0 && org.UsedStorageBytes >= orgLimits.MaxStorageBytes {
 			s.logger.Warn("⚠️ [DocumentService] Storage quota already exceeded",
 				"used_storage", org.UsedStorageBytes,
-				"max_storage", limits.MaxStorageBytes,
+				"max_storage", orgLimits.MaxStorageBytes,
 				"plan", org.PlanTier,
 			)
 			return nil, config.NewQuotaError(
 				"storage",
 				org.UsedStorageBytes,
-				limits.MaxStorageBytes,
+				orgLimits.MaxStorageBytes,
 				fmt.Sprintf("storage quota exceeded: %d/%d bytes (plan: %s)",
-					org.UsedStorageBytes, limits.MaxStorageBytes, org.PlanTier),
+					org.UsedStorageBytes, orgLimits.MaxStorageBytes, org.PlanTier),
 			)
+		}
+	} else if groupID != nil {
+		// Check if this is a standalone group (no organization)
+		var err error
+		group, err = s.groupRepo.FindByID(*groupID)
+		if err != nil {
+			s.logger.Error("❌ [DocumentService] Failed to get group", "group_id", *groupID, "error", err)
+			return nil, fmt.Errorf("failed to get group: %w", err)
+		}
+
+		// Only apply standalone group limits if the group has no organization
+		if group.OrganizationID == nil {
+			isStandaloneGroup = true
+			limits := group.GetPlanLimits()
+			groupLimits = &limits
+
+			// Check storage quota before processing (using group's current usage)
+			if groupLimits.MaxStorageBytes > 0 && group.UsedStorageBytes >= groupLimits.MaxStorageBytes {
+				s.logger.Warn("⚠️ [DocumentService] Standalone group storage quota already exceeded",
+					"group_id", *groupID,
+					"used_storage", group.UsedStorageBytes,
+					"max_storage", groupLimits.MaxStorageBytes,
+					"plan", group.PlanTier,
+				)
+				return nil, config.NewQuotaError(
+					"storage",
+					group.UsedStorageBytes,
+					groupLimits.MaxStorageBytes,
+					fmt.Sprintf("storage quota exceeded: %d/%d bytes (group plan: %s)",
+						group.UsedStorageBytes, groupLimits.MaxStorageBytes, group.PlanTier),
+				)
+			}
 		}
 	}
 
@@ -184,49 +225,81 @@ func (s *documentService) CreateDocument(orgID *uint, groupID *uint, ownerID uin
 		return nil, fmt.Errorf("failed to write file: %w", err)
 	}
 
-	// Check file size and storage limits only for organization-scoped documents
-	if orgID != nil {
-		org, err := s.orgRepo.FindByID(*orgID)
-		if err != nil {
-			os.Remove(filePath)
-			return nil, fmt.Errorf("failed to get organization for quota check: %w", err)
-		}
-
-		limits := org.GetPlanLimits()
-
+	// Check file size and storage limits based on context
+	if orgID != nil && orgLimits != nil {
+		// Organization context: check against org limits
 		// Check file size limit
-		if limits.MaxFileSize > 0 && bytesWritten > limits.MaxFileSize {
+		if orgLimits.MaxFileSize > 0 && bytesWritten > orgLimits.MaxFileSize {
 			os.Remove(filePath)
 			os.RemoveAll(dirPath)
 			s.logger.Warn("⚠️ [DocumentService] File size exceeds limit",
 				"file_size", bytesWritten,
-				"max_size", limits.MaxFileSize,
+				"max_size", orgLimits.MaxFileSize,
 				"plan", org.PlanTier,
 			)
 			return nil, config.NewQuotaError(
 				"file_size",
 				bytesWritten,
-				limits.MaxFileSize,
-				fmt.Sprintf("file size %d bytes exceeds plan limit of %d bytes", bytesWritten, limits.MaxFileSize),
+				orgLimits.MaxFileSize,
+				fmt.Sprintf("file size %d bytes exceeds plan limit of %d bytes", bytesWritten, orgLimits.MaxFileSize),
 			)
 		}
 
 		// Check storage quota (before incrementing)
-		if limits.MaxStorageBytes > 0 && (org.UsedStorageBytes+bytesWritten) > limits.MaxStorageBytes {
+		if orgLimits.MaxStorageBytes > 0 && (org.UsedStorageBytes+bytesWritten) > orgLimits.MaxStorageBytes {
 			os.Remove(filePath)
 			os.RemoveAll(dirPath)
 			s.logger.Warn("⚠️ [DocumentService] Storage quota exceeded",
 				"used_storage", org.UsedStorageBytes,
 				"file_size", bytesWritten,
-				"max_storage", limits.MaxStorageBytes,
+				"max_storage", orgLimits.MaxStorageBytes,
 				"plan", org.PlanTier,
 			)
 			return nil, config.NewQuotaError(
 				"storage",
 				org.UsedStorageBytes+bytesWritten,
-				limits.MaxStorageBytes,
+				orgLimits.MaxStorageBytes,
 				fmt.Sprintf("uploading this file would exceed storage quota (%d + %d > %d bytes)",
-					org.UsedStorageBytes, bytesWritten, limits.MaxStorageBytes),
+					org.UsedStorageBytes, bytesWritten, orgLimits.MaxStorageBytes),
+			)
+		}
+	} else if isStandaloneGroup && groupLimits != nil {
+		// Standalone group context: check against group limits
+		// Check file size limit
+		if groupLimits.MaxFileSize > 0 && bytesWritten > groupLimits.MaxFileSize {
+			os.Remove(filePath)
+			os.RemoveAll(dirPath)
+			s.logger.Warn("⚠️ [DocumentService] File size exceeds standalone group limit",
+				"group_id", *groupID,
+				"file_size", bytesWritten,
+				"max_size", groupLimits.MaxFileSize,
+				"plan", group.PlanTier,
+			)
+			return nil, config.NewQuotaError(
+				"file_size",
+				bytesWritten,
+				groupLimits.MaxFileSize,
+				fmt.Sprintf("file size %d bytes exceeds group plan limit of %d bytes", bytesWritten, groupLimits.MaxFileSize),
+			)
+		}
+
+		// Check storage quota (before incrementing)
+		if groupLimits.MaxStorageBytes > 0 && (group.UsedStorageBytes+bytesWritten) > groupLimits.MaxStorageBytes {
+			os.Remove(filePath)
+			os.RemoveAll(dirPath)
+			s.logger.Warn("⚠️ [DocumentService] Standalone group storage quota exceeded",
+				"group_id", *groupID,
+				"used_storage", group.UsedStorageBytes,
+				"file_size", bytesWritten,
+				"max_storage", groupLimits.MaxStorageBytes,
+				"plan", group.PlanTier,
+			)
+			return nil, config.NewQuotaError(
+				"storage",
+				group.UsedStorageBytes+bytesWritten,
+				groupLimits.MaxStorageBytes,
+				fmt.Sprintf("uploading this file would exceed group storage quota (%d + %d > %d bytes)",
+					group.UsedStorageBytes, bytesWritten, groupLimits.MaxStorageBytes),
 			)
 		}
 	}
@@ -277,11 +350,18 @@ func (s *documentService) CreateDocument(orgID *uint, groupID *uint, ownerID uin
 		return nil, err
 	}
 
-	// Atomically increment organization storage usage (only for organization-scoped documents)
+	// Atomically increment storage usage based on context
 	if orgID != nil {
+		// Organization-scoped document
 		if err := s.orgRepo.IncrementStorage(*orgID, bytesWritten); err != nil {
 			// Log but don't fail - document was created successfully
-			s.logger.Error("❌ [DocumentService] Failed to update storage usage", "org_id", *orgID, "bytes", bytesWritten, "error", err)
+			s.logger.Error("❌ [DocumentService] Failed to update org storage usage", "org_id", *orgID, "bytes", bytesWritten, "error", err)
+		}
+	} else if isStandaloneGroup && groupID != nil {
+		// Standalone group document
+		if err := s.groupRepo.IncrementStorage(*groupID, bytesWritten); err != nil {
+			// Log but don't fail - document was created successfully
+			s.logger.Error("❌ [DocumentService] Failed to update standalone group storage usage", "group_id", *groupID, "bytes", bytesWritten, "error", err)
 		}
 	}
 
@@ -345,12 +425,26 @@ func (s *documentService) DeleteDocument(docID uuid.UUID, requesterID uint) erro
 		return err
 	}
 
-	// Atomically decrement organization storage usage (only for organization-scoped documents)
-	if doc.FileSize > 0 && doc.OrganizationID != nil {
-		if err := s.orgRepo.DecrementStorage(*doc.OrganizationID, doc.FileSize); err != nil {
-			// Log but don't fail - document was deleted successfully
-			s.logger.Error("❌ [DocumentService] Failed to update storage usage after delete",
-				"org_id", *doc.OrganizationID, "bytes", doc.FileSize, "error", err)
+	// Atomically decrement storage usage based on context
+	if doc.FileSize > 0 {
+		if doc.OrganizationID != nil {
+			// Organization-scoped document
+			if err := s.orgRepo.DecrementStorage(*doc.OrganizationID, doc.FileSize); err != nil {
+				// Log but don't fail - document was deleted successfully
+				s.logger.Error("❌ [DocumentService] Failed to update org storage usage after delete",
+					"org_id", *doc.OrganizationID, "bytes", doc.FileSize, "error", err)
+			}
+		} else if doc.GroupID != nil {
+			// Check if this is a standalone group document
+			group, err := s.groupRepo.FindByID(*doc.GroupID)
+			if err == nil && group.OrganizationID == nil {
+				// Standalone group document - decrement group storage
+				if err := s.groupRepo.DecrementStorage(*doc.GroupID, doc.FileSize); err != nil {
+					// Log but don't fail - document was deleted successfully
+					s.logger.Error("❌ [DocumentService] Failed to update standalone group storage usage after delete",
+						"group_id", *doc.GroupID, "bytes", doc.FileSize, "error", err)
+				}
+			}
 		}
 	}
 

@@ -92,9 +92,15 @@ func SetupRouter(
 		// Admin routes (protected, requires admin role check in handler)
 		adminRoutes := api.Group("/admin")
 		{
+			// Organization billing management
 			adminRoutes.PUT("/organizations/:id/tier", adminHandler.UpdateTier)
 			adminRoutes.PUT("/organizations/:id/billing", adminHandler.UpdateBillingStatus)
 			adminRoutes.GET("/organizations/:id/quota", adminHandler.GetOrganizationQuota)
+
+			// Standalone group billing management
+			adminRoutes.PUT("/groups/:group_id/tier", groupHandler.UpdateGroupTier)
+			adminRoutes.PUT("/groups/:group_id/billing", groupHandler.UpdateGroupBillingStatus)
+			adminRoutes.GET("/groups/:group_id/quota", groupHandler.GetGroupQuota)
 		}
 	}
 

@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
 	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
@@ -17,6 +18,14 @@ type Group struct {
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 
+	// Billing fields for standalone groups (only relevant when OrganizationID is nil)
+	PlanTier         config.PlanTier      `gorm:"not null;default:FREE" json:"plan_tier,omitempty"`
+	BillingStatus    config.BillingStatus `gorm:"not null;default:active" json:"billing_status,omitempty"`
+	StripeCustomerID *string              `json:"stripe_customer_id,omitempty"`
+	SubscriptionID   *string              `json:"subscription_id,omitempty"`
+	CurrentPeriodEnd *time.Time           `json:"current_period_end,omitempty"`
+	UsedStorageBytes int64                `gorm:"not null;default:0" json:"used_storage_bytes,omitempty"`
+
 	// Relationships
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
 	Roles        []GroupRole   `gorm:"foreignKey:GroupID" json:"roles,omitempty"`
@@ -26,6 +35,23 @@ type Group struct {
 // TableName overrides the table name
 func (Group) TableName() string {
 	return "groups"
+}
+
+// IsStandalone returns true if this group does not belong to an organization
+func (g *Group) IsStandalone() bool {
+	return g.OrganizationID == nil
+}
+
+// GetPlanLimits returns the plan limits for this standalone group's tier.
+// For groups that belong to an organization, this returns the FREE tier limits
+// (the organization's limits should be used instead).
+func (g *Group) GetPlanLimits() config.PlanLimits {
+	if !g.IsStandalone() {
+		// For organization groups, return FREE limits as a fallback
+		// The organization's limits should be checked instead
+		return config.GetPlanLimits(config.PlanFree)
+	}
+	return config.GetPlanLimits(g.PlanTier)
 }
 
 // GroupRole represents a role within a group with dynamic permissions
