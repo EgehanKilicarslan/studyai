@@ -19,6 +19,7 @@ import (
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/repository"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/grpc"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/middleware"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/worker"
 	pb "github.com/EgehanKilicarslan/studyai/backend-go/pb"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc/metadata"
@@ -34,6 +35,7 @@ type ChatHandler struct {
 	groupRepo   repository.GroupRepository
 	redisClient database.ChatHistoryStore
 	chatRepo    repository.ChatRepository
+	workerPool  *worker.Pool
 }
 
 // NewChatHandler injects dependencies (Dependency Injection Go Style)
@@ -46,6 +48,7 @@ func NewChatHandler(
 	groupRepo repository.GroupRepository,
 	redisClient database.ChatHistoryStore,
 	chatRepo repository.ChatRepository,
+	workerPool *worker.Pool,
 ) *ChatHandler {
 	return &ChatHandler{
 		services:    services,
@@ -56,6 +59,7 @@ func NewChatHandler(
 		groupRepo:   groupRepo,
 		redisClient: redisClient,
 		chatRepo:    chatRepo,
+		workerPool:  workerPool,
 	}
 }
 
@@ -397,19 +401,18 @@ func (h *ChatHandler) getChatHistory(ctx context.Context, sessionID uuid.UUID) (
 		return nil, fmt.Errorf("failed to get messages from Postgres: %w", err)
 	}
 
-	// Populate Redis cache asynchronously (fire and forget)
+	// Populate Redis cache asynchronously (tracked by worker pool)
 	if len(messages) > 0 {
-		go func() {
-			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			if err := h.redisClient.SetChatHistory(bgCtx, sessionID, messages); err != nil {
+		sessionIDCopy := sessionID
+		messagesCopy := messages
+		h.workerPool.SubmitWithTimeout(5*time.Second, func(ctx context.Context) {
+			if err := h.redisClient.SetChatHistory(ctx, sessionIDCopy, messagesCopy); err != nil {
 				h.logger.Warn("⚠️ [Handler] Failed to populate Redis cache",
-					"session_id", sessionID,
+					"session_id", sessionIDCopy,
 					"error", err,
 				)
 			}
-		}()
+		})
 	}
 
 	h.logger.Debug("✅ [Handler] Chat history loaded from Postgres",
@@ -430,21 +433,22 @@ func (h *ChatHandler) saveChatMessage(ctx context.Context, message models.ChatMe
 		)
 	}
 
-	// Save to Postgres asynchronously
-	go func() {
-		if err := h.chatRepo.CreateMessage(&message); err != nil {
+	// Save to Postgres asynchronously (tracked by worker pool)
+	messageCopy := message
+	h.workerPool.SubmitWithTimeout(10*time.Second, func(ctx context.Context) {
+		if err := h.chatRepo.CreateMessage(&messageCopy); err != nil {
 			h.logger.Error("❌ [Handler] Failed to save message to Postgres",
-				"session_id", message.SessionID,
-				"message_id", message.ID,
+				"session_id", messageCopy.SessionID,
+				"message_id", messageCopy.ID,
 				"error", err,
 			)
 		} else {
 			h.logger.Debug("💾 [Handler] Message saved to Postgres",
-				"session_id", message.SessionID,
-				"message_id", message.ID,
+				"session_id", messageCopy.SessionID,
+				"message_id", messageCopy.ID,
 			)
 		}
-	}()
+	})
 }
 
 // formatChatHistory converts messages to JSON format for gRPC metadata
