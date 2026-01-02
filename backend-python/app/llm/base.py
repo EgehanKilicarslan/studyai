@@ -14,6 +14,11 @@ class LLMProvider(ABC):
         "Do not fabricate information or use outside knowledge unless explicitly asked."
     )
 
+    @property
+    def system_prompt(self) -> str:
+        """Get the system prompt for token counting."""
+        return self.DEFAULT_SYSTEM_PROMPT
+
     def _build_context_prompt(self, query: str, context_docs: List[str]) -> str:
         """Shared prompt builder for all providers"""
         context_str = "\n\n---\n\n".join(context_docs)

@@ -11,6 +11,7 @@ from pb import rag_service_pb2_grpc as rs_grpc
 
 from ..embedding_generator import EmbeddingGenerator
 from ..reranker_service import RerankerService
+from ..token_counter import TokenCounter
 from ..vector_store import VectorStore
 
 # gRPC metadata keys for tenant-scoped access
@@ -118,6 +119,7 @@ class ChatService(rs_grpc.ChatServiceServicer):
         embedder: EmbeddingGenerator,
         reranker: RerankerService,
         chunk_service: ChunkService,
+        token_counter: TokenCounter,
     ):
         self.logger = logger.get_logger(__name__)
         self.llm: LLMProvider = llm_provider
@@ -125,6 +127,7 @@ class ChatService(rs_grpc.ChatServiceServicer):
         self.embedding_service: EmbeddingGenerator = embedder
         self.reranker_service: RerankerService = reranker
         self.chunk_service: ChunkService = chunk_service
+        self.token_counter: TokenCounter = token_counter
 
     async def Chat(
         self, request: rs.ChatRequest, context: grpc.aio.ServicerContext
@@ -238,8 +241,23 @@ class ChatService(rs_grpc.ChatServiceServicer):
             self.logger.info(f"[ChatService] Reranking {len(passages)} documents...")
             ranked_results = self.reranker_service.rerank(request.query, passages, top_k=5)
 
-            # 5) Prepare context documents
-            context_docs = [res["text"] for res in ranked_results]
+            # 5) Prepare context documents with token limit protection
+            # Truncate context to fit within model's context window
+            truncated_results, was_truncated = self.token_counter.truncate_context_docs(
+                system_prompt=self.llm.system_prompt,
+                query=request.query,
+                context_docs=ranked_results,
+                history=chat_history,
+            )
+
+            if was_truncated:
+                self.logger.warning(
+                    f"[ChatService] ⚠️ Context truncated due to token limits: "
+                    f"{len(ranked_results)} -> {len(truncated_results)} documents "
+                    f"(max_tokens={self.token_counter.max_context_tokens})"
+                )
+
+            context_docs = [res["text"] for res in truncated_results]
             self.logger.info(
                 f"[ChatService] Selected {len(context_docs)} high-quality docs after rerank."
             )
@@ -279,7 +297,7 @@ class ChatService(rs_grpc.ChatServiceServicer):
                     )
 
                 source_documents = []
-                for res in ranked_results:
+                for res in truncated_results:
                     meta = res["meta"]
                     doc = rs.Source(
                         document_id=meta.get("document_id", ""),

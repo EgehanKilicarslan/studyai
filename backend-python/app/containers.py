@@ -5,12 +5,7 @@ from database.service import ChunkService
 from dependency_injector import containers, providers
 from llm import get_llm_provider
 from logger import AppLogger
-from services import (
-    DocumentParser,
-    EmbeddingGenerator,
-    RerankerService,
-    VectorStore,
-)
+from services import DocumentParser, EmbeddingGenerator, RerankerService, TokenCounter, VectorStore
 from services.grpc import ChatService, KnowledgeBaseService
 
 
@@ -39,6 +34,8 @@ class Container(containers.DeclarativeContainer):
 
     reranker_service = providers.Factory(RerankerService, settings=config, logger=app_logger)
 
+    token_counter = providers.Factory(TokenCounter, settings=config, logger=app_logger)
+
     vector_store = providers.Factory(
         VectorStore, settings=config, logger=app_logger, embedding_generator=embedding_generator
     )
@@ -51,6 +48,7 @@ class Container(containers.DeclarativeContainer):
         embedder=embedding_generator,
         reranker=reranker_service,
         chunk_service=chunk_service,
+        token_counter=token_counter,
     )
 
     knowledge_base_service = providers.Factory(

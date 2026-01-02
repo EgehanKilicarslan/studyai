@@ -88,6 +88,16 @@ def mock_context_no_org():
 
 
 @pytest.fixture
+def mock_token_counter():
+    """Create a mock token counter."""
+    counter = Mock()
+    counter.truncate_context_docs = Mock(
+        side_effect=lambda system_prompt, query, context_docs, history: (context_docs, False)
+    )
+    return counter
+
+
+@pytest.fixture
 def chat_service(
     mock_logger,
     mock_llm,
@@ -95,10 +105,14 @@ def chat_service(
     mock_embedder,
     mock_reranker,
     mock_chunk_service,
+    mock_token_counter,
 ):
     # Add cache methods to mock_vector_store (since cache is now part of VectorStore)
     mock_vector_store.search_cache = AsyncMock(return_value=None)  # Default: cache miss
     mock_vector_store.save_to_cache = AsyncMock(return_value="mock-cache-id")
+
+    # Add system_prompt property to mock LLM
+    mock_llm.system_prompt = "You are a helpful assistant."
 
     return ChatService(
         logger=mock_logger,
@@ -107,6 +121,7 @@ def chat_service(
         embedder=mock_embedder,
         reranker=mock_reranker,
         chunk_service=mock_chunk_service,
+        token_counter=mock_token_counter,
     )
 
 

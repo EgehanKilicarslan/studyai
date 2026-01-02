@@ -45,6 +45,10 @@ class Settings(BaseSettings):
 
     maximum_file_size: int = Field(default=50 * 1024 * 1024)  # 50 MB
 
+    # Token limits for LLM context window protection
+    max_context_tokens: int = Field(default=8000)  # Max tokens for context window
+    reserve_output_tokens: int = Field(default=1024)  # Tokens reserved for LLM response
+
     @model_validator(mode="after")
     def validate_provider(self) -> "Settings":
         """Validate and normalize the LLM provider"""
