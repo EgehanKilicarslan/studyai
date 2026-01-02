@@ -323,3 +323,15 @@ def process_document_task(
             )
         except Exception as status_error:
             logger.error(f"[DocumentTask] Failed to notify Go of status: {status_error}")
+
+        # ALWAYS clean up the uploaded file to prevent disk exhaustion
+        # This runs whether processing succeeds or fails
+        try:
+            file_path_to_delete = Path(file_path)
+            if file_path_to_delete.exists():
+                file_path_to_delete.unlink()
+                logger.info(f"[DocumentTask] 🗑️ Cleaned up file: {file_path}")
+            else:
+                logger.debug(f"[DocumentTask] File already removed or not found: {file_path}")
+        except Exception as cleanup_error:
+            logger.error(f"[DocumentTask] Failed to clean up file {file_path}: {cleanup_error}")
