@@ -21,6 +21,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Status enum for document processing results
+type DocumentProcessingStatus int32
+
+const (
+	DocumentProcessingStatus_DOCUMENT_STATUS_UNSPECIFIED DocumentProcessingStatus = 0
+	DocumentProcessingStatus_DOCUMENT_STATUS_PROCESSING  DocumentProcessingStatus = 1
+	DocumentProcessingStatus_DOCUMENT_STATUS_COMPLETED   DocumentProcessingStatus = 2
+	DocumentProcessingStatus_DOCUMENT_STATUS_ERROR       DocumentProcessingStatus = 3
+)
+
+// Enum value maps for DocumentProcessingStatus.
+var (
+	DocumentProcessingStatus_name = map[int32]string{
+		0: "DOCUMENT_STATUS_UNSPECIFIED",
+		1: "DOCUMENT_STATUS_PROCESSING",
+		2: "DOCUMENT_STATUS_COMPLETED",
+		3: "DOCUMENT_STATUS_ERROR",
+	}
+	DocumentProcessingStatus_value = map[string]int32{
+		"DOCUMENT_STATUS_UNSPECIFIED": 0,
+		"DOCUMENT_STATUS_PROCESSING":  1,
+		"DOCUMENT_STATUS_COMPLETED":   2,
+		"DOCUMENT_STATUS_ERROR":       3,
+	}
+)
+
+func (x DocumentProcessingStatus) Enum() *DocumentProcessingStatus {
+	p := new(DocumentProcessingStatus)
+	*p = x
+	return p
+}
+
+func (x DocumentProcessingStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DocumentProcessingStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_rag_service_proto_enumTypes[0].Descriptor()
+}
+
+func (DocumentProcessingStatus) Type() protoreflect.EnumType {
+	return &file_rag_service_proto_enumTypes[0]
+}
+
+func (x DocumentProcessingStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DocumentProcessingStatus.Descriptor instead.
+func (DocumentProcessingStatus) EnumDescriptor() ([]byte, []int) {
+	return file_rag_service_proto_rawDescGZIP(), []int{0}
+}
+
 // --------------------------------------------------------
 // Request Message Definitions
 // --------------------------------------------------------
@@ -485,6 +538,126 @@ func (x *DeleteDocumentResponse) GetMessage() string {
 	return ""
 }
 
+type DocumentStatusRequest struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	DocumentId    string                   `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`          // UUID of the document
+	Status        DocumentProcessingStatus `protobuf:"varint,2,opt,name=status,proto3,enum=rag.DocumentProcessingStatus" json:"status,omitempty"` // COMPLETED or ERROR
+	ChunksCount   int32                    `protobuf:"varint,3,opt,name=chunks_count,json=chunksCount,proto3" json:"chunks_count,omitempty"`      // Number of chunks (for COMPLETED)
+	ErrorMessage  string                   `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`    // Error message (for ERROR status)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocumentStatusRequest) Reset() {
+	*x = DocumentStatusRequest{}
+	mi := &file_rag_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocumentStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocumentStatusRequest) ProtoMessage() {}
+
+func (x *DocumentStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_rag_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocumentStatusRequest.ProtoReflect.Descriptor instead.
+func (*DocumentStatusRequest) Descriptor() ([]byte, []int) {
+	return file_rag_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DocumentStatusRequest) GetDocumentId() string {
+	if x != nil {
+		return x.DocumentId
+	}
+	return ""
+}
+
+func (x *DocumentStatusRequest) GetStatus() DocumentProcessingStatus {
+	if x != nil {
+		return x.Status
+	}
+	return DocumentProcessingStatus_DOCUMENT_STATUS_UNSPECIFIED
+}
+
+func (x *DocumentStatusRequest) GetChunksCount() int32 {
+	if x != nil {
+		return x.ChunksCount
+	}
+	return 0
+}
+
+func (x *DocumentStatusRequest) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+type DocumentStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"` // Whether the update was successful
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`  // Additional information or error message
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocumentStatusResponse) Reset() {
+	*x = DocumentStatusResponse{}
+	mi := &file_rag_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocumentStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocumentStatusResponse) ProtoMessage() {}
+
+func (x *DocumentStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_rag_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocumentStatusResponse.ProtoReflect.Descriptor instead.
+func (*DocumentStatusResponse) Descriptor() ([]byte, []int) {
+	return file_rag_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *DocumentStatusResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *DocumentStatusResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_rag_service_proto protoreflect.FileDescriptor
 
 const file_rag_service_proto_rawDesc = "" +
@@ -527,12 +700,29 @@ const file_rag_service_proto_rawDesc = "" +
 	"documentId\"J\n" +
 	"\x16DeleteDocumentResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2<\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xb7\x01\n" +
+	"\x15DocumentStatusRequest\x12\x1f\n" +
+	"\vdocument_id\x18\x01 \x01(\tR\n" +
+	"documentId\x125\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x1d.rag.DocumentProcessingStatusR\x06status\x12!\n" +
+	"\fchunks_count\x18\x03 \x01(\x05R\vchunksCount\x12#\n" +
+	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\"L\n" +
+	"\x16DocumentStatusResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage*\x95\x01\n" +
+	"\x18DocumentProcessingStatus\x12\x1f\n" +
+	"\x1bDOCUMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aDOCUMENT_STATUS_PROCESSING\x10\x01\x12\x1d\n" +
+	"\x19DOCUMENT_STATUS_COMPLETED\x10\x02\x12\x19\n" +
+	"\x15DOCUMENT_STATUS_ERROR\x10\x032<\n" +
 	"\vChatService\x12-\n" +
 	"\x04Chat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x012\xaf\x01\n" +
 	"\x14KnowledgeBaseService\x12L\n" +
 	"\x0fProcessDocument\x12\x1b.rag.ProcessDocumentRequest\x1a\x1c.rag.ProcessDocumentResponse\x12I\n" +
-	"\x0eDeleteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponseB\x06Z\x04./pbb\x06proto3"
+	"\x0eDeleteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponse2]\n" +
+	"\n" +
+	"RagService\x12O\n" +
+	"\x14UpdateDocumentStatus\x12\x1a.rag.DocumentStatusRequest\x1a\x1b.rag.DocumentStatusResponseB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_rag_service_proto_rawDescOnce sync.Once
@@ -546,29 +736,36 @@ func file_rag_service_proto_rawDescGZIP() []byte {
 	return file_rag_service_proto_rawDescData
 }
 
-var file_rag_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_rag_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_rag_service_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_rag_service_proto_goTypes = []any{
-	(*ChatRequest)(nil),             // 0: rag.ChatRequest
-	(*ChatResponse)(nil),            // 1: rag.ChatResponse
-	(*Source)(nil),                  // 2: rag.Source
-	(*ProcessDocumentRequest)(nil),  // 3: rag.ProcessDocumentRequest
-	(*ProcessDocumentResponse)(nil), // 4: rag.ProcessDocumentResponse
-	(*DeleteDocumentRequest)(nil),   // 5: rag.DeleteDocumentRequest
-	(*DeleteDocumentResponse)(nil),  // 6: rag.DeleteDocumentResponse
+	(DocumentProcessingStatus)(0),   // 0: rag.DocumentProcessingStatus
+	(*ChatRequest)(nil),             // 1: rag.ChatRequest
+	(*ChatResponse)(nil),            // 2: rag.ChatResponse
+	(*Source)(nil),                  // 3: rag.Source
+	(*ProcessDocumentRequest)(nil),  // 4: rag.ProcessDocumentRequest
+	(*ProcessDocumentResponse)(nil), // 5: rag.ProcessDocumentResponse
+	(*DeleteDocumentRequest)(nil),   // 6: rag.DeleteDocumentRequest
+	(*DeleteDocumentResponse)(nil),  // 7: rag.DeleteDocumentResponse
+	(*DocumentStatusRequest)(nil),   // 8: rag.DocumentStatusRequest
+	(*DocumentStatusResponse)(nil),  // 9: rag.DocumentStatusResponse
 }
 var file_rag_service_proto_depIdxs = []int32{
-	2, // 0: rag.ChatResponse.source_documents:type_name -> rag.Source
-	0, // 1: rag.ChatService.Chat:input_type -> rag.ChatRequest
-	3, // 2: rag.KnowledgeBaseService.ProcessDocument:input_type -> rag.ProcessDocumentRequest
-	5, // 3: rag.KnowledgeBaseService.DeleteDocument:input_type -> rag.DeleteDocumentRequest
-	1, // 4: rag.ChatService.Chat:output_type -> rag.ChatResponse
-	4, // 5: rag.KnowledgeBaseService.ProcessDocument:output_type -> rag.ProcessDocumentResponse
-	6, // 6: rag.KnowledgeBaseService.DeleteDocument:output_type -> rag.DeleteDocumentResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 0: rag.ChatResponse.source_documents:type_name -> rag.Source
+	0, // 1: rag.DocumentStatusRequest.status:type_name -> rag.DocumentProcessingStatus
+	1, // 2: rag.ChatService.Chat:input_type -> rag.ChatRequest
+	4, // 3: rag.KnowledgeBaseService.ProcessDocument:input_type -> rag.ProcessDocumentRequest
+	6, // 4: rag.KnowledgeBaseService.DeleteDocument:input_type -> rag.DeleteDocumentRequest
+	8, // 5: rag.RagService.UpdateDocumentStatus:input_type -> rag.DocumentStatusRequest
+	2, // 6: rag.ChatService.Chat:output_type -> rag.ChatResponse
+	5, // 7: rag.KnowledgeBaseService.ProcessDocument:output_type -> rag.ProcessDocumentResponse
+	7, // 8: rag.KnowledgeBaseService.DeleteDocument:output_type -> rag.DeleteDocumentResponse
+	9, // 9: rag.RagService.UpdateDocumentStatus:output_type -> rag.DocumentStatusResponse
+	6, // [6:10] is the sub-list for method output_type
+	2, // [2:6] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_rag_service_proto_init() }
@@ -581,13 +778,14 @@ func file_rag_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rag_service_proto_rawDesc), len(file_rag_service_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   7,
+			NumEnums:      1,
+			NumMessages:   9,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   3,
 		},
 		GoTypes:           file_rag_service_proto_goTypes,
 		DependencyIndexes: file_rag_service_proto_depIdxs,
+		EnumInfos:         file_rag_service_proto_enumTypes,
 		MessageInfos:      file_rag_service_proto_msgTypes,
 	}.Build()
 	File_rag_service_proto = out.File

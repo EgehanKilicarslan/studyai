@@ -147,7 +147,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // --------------------------------------------------------
-// Knowledge Base Service Definition
+// Knowledge Base Service Definition (Go -> Python)
 // --------------------------------------------------------
 type KnowledgeBaseServiceClient interface {
 	// / ProcessDocument is an RPC that processes a document that was already saved by Go.
@@ -191,7 +191,7 @@ func (c *knowledgeBaseServiceClient) DeleteDocument(ctx context.Context, in *Del
 // for forward compatibility.
 //
 // --------------------------------------------------------
-// Knowledge Base Service Definition
+// Knowledge Base Service Definition (Go -> Python)
 // --------------------------------------------------------
 type KnowledgeBaseServiceServer interface {
 	// / ProcessDocument is an RPC that processes a document that was already saved by Go.
@@ -287,6 +287,122 @@ var KnowledgeBaseService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteDocument",
 			Handler:    _KnowledgeBaseService_DeleteDocument_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "rag_service.proto",
+}
+
+const (
+	RagService_UpdateDocumentStatus_FullMethodName = "/rag.RagService/UpdateDocumentStatus"
+)
+
+// RagServiceClient is the client API for RagService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// --------------------------------------------------------
+// Rag Service Definition (Python -> Go)
+// This service is hosted by Go and called by Python workers.
+// --------------------------------------------------------
+type RagServiceClient interface {
+	// / UpdateDocumentStatus is called by Python after processing completes.
+	// / Go will update the documents table and handle quota refunds on ERROR.
+	UpdateDocumentStatus(ctx context.Context, in *DocumentStatusRequest, opts ...grpc.CallOption) (*DocumentStatusResponse, error)
+}
+
+type ragServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRagServiceClient(cc grpc.ClientConnInterface) RagServiceClient {
+	return &ragServiceClient{cc}
+}
+
+func (c *ragServiceClient) UpdateDocumentStatus(ctx context.Context, in *DocumentStatusRequest, opts ...grpc.CallOption) (*DocumentStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DocumentStatusResponse)
+	err := c.cc.Invoke(ctx, RagService_UpdateDocumentStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RagServiceServer is the server API for RagService service.
+// All implementations must embed UnimplementedRagServiceServer
+// for forward compatibility.
+//
+// --------------------------------------------------------
+// Rag Service Definition (Python -> Go)
+// This service is hosted by Go and called by Python workers.
+// --------------------------------------------------------
+type RagServiceServer interface {
+	// / UpdateDocumentStatus is called by Python after processing completes.
+	// / Go will update the documents table and handle quota refunds on ERROR.
+	UpdateDocumentStatus(context.Context, *DocumentStatusRequest) (*DocumentStatusResponse, error)
+	mustEmbedUnimplementedRagServiceServer()
+}
+
+// UnimplementedRagServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRagServiceServer struct{}
+
+func (UnimplementedRagServiceServer) UpdateDocumentStatus(context.Context, *DocumentStatusRequest) (*DocumentStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateDocumentStatus not implemented")
+}
+func (UnimplementedRagServiceServer) mustEmbedUnimplementedRagServiceServer() {}
+func (UnimplementedRagServiceServer) testEmbeddedByValue()                    {}
+
+// UnsafeRagServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RagServiceServer will
+// result in compilation errors.
+type UnsafeRagServiceServer interface {
+	mustEmbedUnimplementedRagServiceServer()
+}
+
+func RegisterRagServiceServer(s grpc.ServiceRegistrar, srv RagServiceServer) {
+	// If the following call panics, it indicates UnimplementedRagServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RagService_ServiceDesc, srv)
+}
+
+func _RagService_UpdateDocumentStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DocumentStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RagServiceServer).UpdateDocumentStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RagService_UpdateDocumentStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RagServiceServer).UpdateDocumentStatus(ctx, req.(*DocumentStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RagService_ServiceDesc is the grpc.ServiceDesc for RagService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RagService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rag.RagService",
+	HandlerType: (*RagServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "UpdateDocumentStatus",
+			Handler:    _RagService_UpdateDocumentStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

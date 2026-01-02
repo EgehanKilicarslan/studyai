@@ -2,17 +2,21 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
+
+	"google.golang.org/grpc"
 
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/api"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/repository"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/service"
-	"github.com/EgehanKilicarslan/studyai/backend-go/internal/grpc"
+	internalgrpc "github.com/EgehanKilicarslan/studyai/backend-go/internal/grpc"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/handler"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/logger"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/middleware"
+	pb "github.com/EgehanKilicarslan/studyai/backend-go/pb"
 )
 
 func main() {
@@ -76,20 +80,41 @@ func main() {
 	}
 	defer rateLimiter.Close()
 
-	// 8. Start RAG Client
-	grpcClient, err := grpc.NewClient(cfg.AIServiceAddr, false)
+	// 8. Start RAG Client (Go -> Python)
+	grpcClient, err := internalgrpc.NewClient(cfg.AIServiceAddr, false)
 	if err != nil {
 		appLogger.Error("❌ Failed to connect to Python service", "error", err)
 	}
 	defer grpcClient.Close()
 
-	// 9. Setup Chat and KnowledgeBase Handlers and Router
+	// 9. Start gRPC Server (Python -> Go)
+	ragServiceServer := internalgrpc.NewRagServiceServer(documentRepo, orgRepo, appLogger)
+	grpcServer := grpc.NewServer()
+	pb.RegisterRagServiceServer(grpcServer, ragServiceServer)
+
+	grpcAddr := fmt.Sprintf(":%s", cfg.ApiGrpcPort)
+	grpcListener, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		appLogger.Error("❌ Failed to listen for gRPC", "error", err)
+		os.Exit(1)
+	}
+
+	// Start gRPC server in a goroutine
+	go func() {
+		appLogger.Info("🔌 [Go] gRPC Server running...", "port", cfg.ApiGrpcPort)
+		if err := grpcServer.Serve(grpcListener); err != nil {
+			appLogger.Error("❌ gRPC Server failed", "error", err)
+		}
+	}()
+	defer grpcServer.GracefulStop()
+
+	// 10. Setup Chat and KnowledgeBase Handlers and Router
 	chatHandler := handler.NewChatHandler(grpcClient, cfg, appLogger, rateLimiter, orgRepo, groupRepo, redisClient, chatRepo)
 	knowledgeBaseHandler := handler.NewKnowledgeBaseHandler(grpcClient, documentService, groupRepo, cfg, appLogger)
 
 	r := api.SetupRouter(chatHandler, knowledgeBaseHandler, authHandler, groupHandler, adminHandler, authMiddleware)
 
-	// 10. Start Server
+	// 11. Start HTTP Server
 	addr := fmt.Sprintf(":%s", cfg.ApiServicePort)
 	appLogger.Info("🌍 [Go] HTTP Server running on port...", "port", addr)
 	if err := r.Run(addr); err != nil {

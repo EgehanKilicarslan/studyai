@@ -6,7 +6,6 @@ from database.service import ChunkService
 from logger import AppLogger
 from pb import rag_service_pb2 as rs
 from pb import rag_service_pb2_grpc as rs_grpc
-from tasks.document_tasks import process_document_task
 
 from ..document_parser import DocumentParser
 from ..embedding_generator import EmbeddingGenerator
@@ -111,6 +110,9 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
             self.logger.info(
                 f"[KnowledgeBaseService] Queueing document for async processing: {document_id}"
             )
+
+            # Lazy import to avoid circular dependency with tasks.document_tasks
+            from tasks.document_tasks import process_document_task
 
             # Send task to Celery worker
             task = process_document_task.delay(

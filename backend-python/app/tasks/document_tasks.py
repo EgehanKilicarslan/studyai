@@ -5,32 +5,30 @@ This module contains async tasks for processing documents:
 - Parsing files
 - Generating embeddings
 - Upserting vectors to Qdrant
-- Updating document status in PostgreSQL
+- Notifying Go of status changes via gRPC (no direct DB writes)
 
 Note: These tasks run synchronously in Celery workers, outside of the
 async gRPC server context.
+
+IMPORTANT: Python does NOT write directly to the `documents` table.
+All status updates are sent to Go via gRPC, which handles:
+- Updating document status in the database
+- Refunding storage quota on ERROR
 """
 
 import logging
 import uuid
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from celery_app import celery_app
 from config import settings
+from pb import rag_service_pb2 as rs
 from qdrant_client import QdrantClient, models
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-
-class DocumentStatus(str, Enum):
-    """Document status enum matching Go's database schema."""
-
-    PENDING = "PENDING"
-    PROCESSING = "PROCESSING"
-    COMPLETED = "COMPLETED"
-    ERROR = "ERROR"
+from app.services.grpc.api_grpc_client import update_document_status_via_grpc
 
 
 def get_sync_db_session() -> Session:
@@ -47,65 +45,41 @@ def get_sync_db_session() -> Session:
     return SessionLocal()
 
 
-def update_document_status(
+def notify_status_update(
     document_id: str,
-    status: DocumentStatus,
+    status: int,
     chunks_count: int = 0,
-    error_message: Optional[str] = None,
-) -> None:
+    error_message: str = "",
+) -> bool:
     """
-    Update the document status in PostgreSQL.
+    Notify Go of a document status update via gRPC.
+
+    This function replaces direct SQL updates to the documents table.
+    Go will handle:
+    - Updating the document status in the database
+    - Refunding storage quota on ERROR status
 
     Args:
         document_id: UUID of the document (from Go)
-        status: New status (PROCESSING, COMPLETED, ERROR)
+        status: New status (PROCESSING, COMPLETED, ERROR) - use rs.DOCUMENT_STATUS_* constants
         chunks_count: Number of chunks created (for COMPLETED status)
         error_message: Error message (for ERROR status)
+
+    Returns:
+        True if the update was successful, False otherwise
     """
-    session = get_sync_db_session()
-    try:
-        # Use raw SQL to update the documents table managed by Go
-        if error_message:
-            query = text("""
-                UPDATE documents 
-                SET status = :status, 
-                    chunks_count = :chunks_count,
-                    error_message = :error_message,
-                    updated_at = NOW()
-                WHERE id = :document_id
-            """)
-            session.execute(
-                query,
-                {
-                    "status": status.value,
-                    "chunks_count": chunks_count,
-                    "error_message": error_message,
-                    "document_id": document_id,
-                },
-            )
-        else:
-            query = text("""
-                UPDATE documents 
-                SET status = :status, 
-                    chunks_count = :chunks_count,
-                    error_message = NULL,
-                    updated_at = NOW()
-                WHERE id = :document_id
-            """)
-            session.execute(
-                query,
-                {
-                    "status": status.value,
-                    "chunks_count": chunks_count,
-                    "document_id": document_id,
-                },
-            )
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        raise e
-    finally:
-        session.close()
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"[notify_status_update] Notifying Go: doc_id={document_id}, "
+        f"status={rs.DocumentProcessingStatus.Name(status)}, chunks={chunks_count}"  # type: ignore[arg-type]
+    )
+
+    return update_document_status_via_grpc(
+        document_id=document_id,
+        status=status,
+        chunks_count=chunks_count,
+        error_message=error_message,
+    )
 
 
 def store_chunks_sync(
@@ -224,26 +198,29 @@ def process_document_task(
         f"org={organization_id}, group={group_id}"
     )
 
+    # Track final status for finally block
+    final_status = rs.DocumentProcessingStatus.DOCUMENT_STATUS_ERROR
+    final_chunks_count = 0
+    final_error_message = ""
+
     try:
-        # 1) Update status to PROCESSING
-        update_document_status(document_id, DocumentStatus.PROCESSING)
+        # 1) Update status to PROCESSING via gRPC
+        notify_status_update(document_id, rs.DocumentProcessingStatus.DOCUMENT_STATUS_PROCESSING)
 
         # 2) Verify file exists
         file_path_obj = Path(file_path)
         if not file_path_obj.exists():
-            error_msg = f"File not found: {file_path}"
-            logger.error(f"[DocumentTask] ❌ {error_msg}")
-            update_document_status(document_id, DocumentStatus.ERROR, error_message=error_msg)
-            return {"status": "error", "message": error_msg, "document_id": document_id}
+            final_error_message = f"File not found: {file_path}"
+            logger.error(f"[DocumentTask] ❌ {final_error_message}")
+            return {"status": "error", "message": final_error_message, "document_id": document_id}
 
         # 3) Check file size
         file_size = file_path_obj.stat().st_size
         max_file_size = settings.maximum_file_size
         if file_size > max_file_size:
-            error_msg = f"File size ({file_size}) exceeds maximum ({max_file_size})"
-            logger.error(f"[DocumentTask] ❌ {error_msg}")
-            update_document_status(document_id, DocumentStatus.ERROR, error_message=error_msg)
-            return {"status": "error", "message": error_msg, "document_id": document_id}
+            final_error_message = f"File size ({file_size}) exceeds maximum ({max_file_size})"
+            logger.error(f"[DocumentTask] ❌ {final_error_message}")
+            return {"status": "error", "message": final_error_message, "document_id": document_id}
 
         # 4) Parse the document
         logger.info(f"[DocumentTask] Parsing document: {filename}...")
@@ -251,20 +228,19 @@ def process_document_task(
         try:
             text_chunks, metadatas = parser.parse_file(file_path, filename)
         except ValueError as ve:
-            error_msg = str(ve)
-            logger.warning(f"[DocumentTask] ⚠️ Validation Error: {error_msg}")
-            update_document_status(document_id, DocumentStatus.ERROR, error_message=error_msg)
-            return {"status": "error", "message": error_msg, "document_id": document_id}
+            final_error_message = str(ve)
+            logger.warning(f"[DocumentTask] ⚠️ Validation Error: {final_error_message}")
+            return {"status": "error", "message": final_error_message, "document_id": document_id}
 
         if not text_chunks:
-            error_msg = "No text extracted from document"
-            logger.warning(f"[DocumentTask] ⚠️ {error_msg}")
-            update_document_status(
-                document_id, DocumentStatus.COMPLETED, chunks_count=0, error_message=error_msg
-            )
+            # No text extracted - still mark as COMPLETED but with warning
+            final_status = rs.DocumentProcessingStatus.DOCUMENT_STATUS_COMPLETED
+            final_chunks_count = 0
+            final_error_message = "No text extracted from document"
+            logger.warning(f"[DocumentTask] ⚠️ {final_error_message}")
             return {
                 "status": "warning",
-                "message": error_msg,
+                "message": final_error_message,
                 "document_id": document_id,
                 "chunks_count": 0,
             }
@@ -309,31 +285,41 @@ def process_document_task(
         )
         qdrant_client.close()
 
-        # 8) Update document status to COMPLETED
-        chunks_count = len(chunk_ids)
-        update_document_status(document_id, DocumentStatus.COMPLETED, chunks_count=chunks_count)
+        # 8) Mark processing as successful
+        final_status = rs.DocumentProcessingStatus.DOCUMENT_STATUS_COMPLETED
+        final_chunks_count = len(chunk_ids)
+        final_error_message = ""
 
         logger.info(
             f"[DocumentTask] ✅ Document processed successfully: "
-            f"doc_id={document_id}, chunks={chunks_count}"
+            f"doc_id={document_id}, chunks={final_chunks_count}"
         )
 
         return {
             "status": "success",
-            "message": f"Successfully processed and indexed {chunks_count} chunks",
+            "message": f"Successfully processed and indexed {final_chunks_count} chunks",
             "document_id": document_id,
-            "chunks_count": chunks_count,
+            "chunks_count": final_chunks_count,
         }
 
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"[DocumentTask] ❌ Critical Error: {error_msg}", exc_info=True)
-
-        # Update status to ERROR
-        try:
-            update_document_status(document_id, DocumentStatus.ERROR, error_message=error_msg)
-        except Exception as status_error:
-            logger.error(f"[DocumentTask] Failed to update status: {status_error}")
+        # Capture error for finally block
+        final_error_message = str(e)
+        final_status = rs.DocumentProcessingStatus.DOCUMENT_STATUS_ERROR
+        logger.error(f"[DocumentTask] ❌ Critical Error: {final_error_message}", exc_info=True)
 
         # Re-raise to trigger Celery retry mechanism
         raise self.retry(exc=e)
+
+    finally:
+        # ALWAYS notify Go of the final status via gRPC
+        # This ensures quota is refunded on ERROR even if processing crashes
+        try:
+            notify_status_update(
+                document_id=document_id,
+                status=final_status,
+                chunks_count=final_chunks_count,
+                error_message=final_error_message,
+            )
+        except Exception as status_error:
+            logger.error(f"[DocumentTask] Failed to notify Go of status: {status_error}")

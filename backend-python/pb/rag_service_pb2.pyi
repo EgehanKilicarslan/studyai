@@ -7,6 +7,7 @@ import builtins
 import collections.abc
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
+import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import sys
 import typing
@@ -17,6 +18,31 @@ else:
     import typing_extensions
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+
+class _DocumentProcessingStatus:
+    ValueType = typing.NewType("ValueType", builtins.int)
+    V: typing_extensions.TypeAlias = ValueType
+
+class _DocumentProcessingStatusEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_DocumentProcessingStatus.ValueType], builtins.type):
+    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    DOCUMENT_STATUS_UNSPECIFIED: _DocumentProcessingStatus.ValueType  # 0
+    DOCUMENT_STATUS_PROCESSING: _DocumentProcessingStatus.ValueType  # 1
+    DOCUMENT_STATUS_COMPLETED: _DocumentProcessingStatus.ValueType  # 2
+    DOCUMENT_STATUS_ERROR: _DocumentProcessingStatus.ValueType  # 3
+
+class DocumentProcessingStatus(_DocumentProcessingStatus, metaclass=_DocumentProcessingStatusEnumTypeWrapper):
+    """--------------------------------------------------------
+    Document Status Update Message Definitions (Python -> Go)
+    --------------------------------------------------------
+
+    Status enum for document processing results
+    """
+
+DOCUMENT_STATUS_UNSPECIFIED: DocumentProcessingStatus.ValueType  # 0
+DOCUMENT_STATUS_PROCESSING: DocumentProcessingStatus.ValueType  # 1
+DOCUMENT_STATUS_COMPLETED: DocumentProcessingStatus.ValueType  # 2
+DOCUMENT_STATUS_ERROR: DocumentProcessingStatus.ValueType  # 3
+Global___DocumentProcessingStatus: typing_extensions.TypeAlias = DocumentProcessingStatus
 
 @typing.final
 class ChatRequest(google.protobuf.message.Message):
@@ -223,3 +249,51 @@ class DeleteDocumentResponse(google.protobuf.message.Message):
     def ClearField(self, field_name: typing.Literal["message", b"message", "status", b"status"]) -> None: ...
 
 Global___DeleteDocumentResponse: typing_extensions.TypeAlias = DeleteDocumentResponse
+
+@typing.final
+class DocumentStatusRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    DOCUMENT_ID_FIELD_NUMBER: builtins.int
+    STATUS_FIELD_NUMBER: builtins.int
+    CHUNKS_COUNT_FIELD_NUMBER: builtins.int
+    ERROR_MESSAGE_FIELD_NUMBER: builtins.int
+    document_id: builtins.str
+    """UUID of the document"""
+    status: Global___DocumentProcessingStatus.ValueType
+    """COMPLETED or ERROR"""
+    chunks_count: builtins.int
+    """Number of chunks (for COMPLETED)"""
+    error_message: builtins.str
+    """Error message (for ERROR status)"""
+    def __init__(
+        self,
+        *,
+        document_id: builtins.str = ...,
+        status: Global___DocumentProcessingStatus.ValueType = ...,
+        chunks_count: builtins.int = ...,
+        error_message: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["chunks_count", b"chunks_count", "document_id", b"document_id", "error_message", b"error_message", "status", b"status"]) -> None: ...
+
+Global___DocumentStatusRequest: typing_extensions.TypeAlias = DocumentStatusRequest
+
+@typing.final
+class DocumentStatusResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    SUCCESS_FIELD_NUMBER: builtins.int
+    MESSAGE_FIELD_NUMBER: builtins.int
+    success: builtins.bool
+    """Whether the update was successful"""
+    message: builtins.str
+    """Additional information or error message"""
+    def __init__(
+        self,
+        *,
+        success: builtins.bool = ...,
+        message: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["message", b"message", "success", b"success"]) -> None: ...
+
+Global___DocumentStatusResponse: typing_extensions.TypeAlias = DocumentStatusResponse

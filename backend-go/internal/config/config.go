@@ -12,6 +12,7 @@ type Config struct {
 	AppEnv                 string
 	LogLevel               slog.Level
 	ApiServicePort         string
+	ApiGrpcPort            string
 	AIServiceAddr          string
 	MaxFileSize            int64
 	ChatTimeout            int64
@@ -36,6 +37,7 @@ func LoadConfig() *Config {
 		AppEnv:                 getEnv("APP_ENV", "development"),                  // Default development
 		LogLevel:               getLogLevel(),                                     // Default INFO
 		ApiServicePort:         getEnv("API_SERVICE_PORT", "8080"),                // Default 8080
+		ApiGrpcPort:            getEnv("API_GRPC_PORT", "50052"),                  // Default 50052 (Go gRPC server)
 		AIServiceAddr:          getAIServiceAddr(),                                // Default backend-python:50051
 		MaxFileSize:            getEnvAsInt64("MAX_FILE_SIZE", 10*1024*1024),      // Default 10 MB
 		ChatTimeout:            getEnvAsInt64("CHAT_TIMEOUT", 120),                // Default 120 seconds

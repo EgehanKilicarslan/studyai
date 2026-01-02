@@ -16,7 +16,7 @@ service ChatService {
 }
 
 // --------------------------------------------------------
-// Knowledge Base Service Definition
+// Knowledge Base Service Definition (Go -> Python)
 // --------------------------------------------------------
 service KnowledgeBaseService {
   /// ProcessDocument is an RPC that processes a document that was already saved by Go.
@@ -26,6 +26,16 @@ service KnowledgeBaseService {
   /// DeleteDocument is an RPC that deletes a specified document from the vector store.
   /// It takes a DeleteDocumentRequest and returns a DeleteDocumentResponse.
   rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
+}
+
+// --------------------------------------------------------
+// Rag Service Definition (Python -> Go)
+// This service is hosted by Go and called by Python workers.
+// --------------------------------------------------------
+service RagService {
+  /// UpdateDocumentStatus is called by Python after processing completes.
+  /// Go will update the documents table and handle quota refunds on ERROR.
+  rpc UpdateDocumentStatus (DocumentStatusRequest) returns (DocumentStatusResponse);
 }
 
 // --------------------------------------------------------
@@ -84,5 +94,29 @@ message DeleteDocumentRequest {
 
 message DeleteDocumentResponse {
   string status  = 1; // Status message
+  string message = 2; // Additional information or error message
+}
+
+// --------------------------------------------------------
+// Document Status Update Message Definitions (Python -> Go)
+// --------------------------------------------------------
+
+// Status enum for document processing results
+enum DocumentProcessingStatus {
+  DOCUMENT_STATUS_UNSPECIFIED = 0;
+  DOCUMENT_STATUS_PROCESSING  = 1;
+  DOCUMENT_STATUS_COMPLETED   = 2;
+  DOCUMENT_STATUS_ERROR       = 3;
+}
+
+message DocumentStatusRequest {
+  string                   document_id   = 1; // UUID of the document
+  DocumentProcessingStatus status        = 2; // COMPLETED or ERROR
+  int32                    chunks_count  = 3; // Number of chunks (for COMPLETED)
+  string                   error_message = 4; // Error message (for ERROR status)
+}
+
+message DocumentStatusResponse {
+  bool   success = 1; // Whether the update was successful
   string message = 2; // Additional information or error message
 }

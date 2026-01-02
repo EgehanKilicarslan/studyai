@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"0\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"t\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\x12\x11\n\tis_cached\x18\x04 \x01(\x08\"d\n\x06Source\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x13\n\x0bpage_number\x18\x03 \x01(\x05\x12\x0f\n\x07snippet\x18\x04 \x01(\t\x12\r\n\x05score\x18\x05 \x01(\x02\"\xa5\x01\n\x16ProcessDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x10\n\x08\x66ilename\x18\x03 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x17\n\x0forganization_id\x18\x05 \x01(\r\x12\x10\n\x08group_id\x18\x06 \x01(\r\x12\x10\n\x08owner_id\x18\x07 \x01(\r\"e\n\x17ProcessDocumentResponse\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x14\n\x0c\x63hunks_count\x18\x03 \x01(\x05\x12\x0f\n\x07message\x18\x04 \x01(\t\",\n\x15\x44\x65leteDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\"9\n\x16\x44\x65leteDocumentResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t2<\n\x0b\x43hatService\x12-\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x01\x32\xaf\x01\n\x14KnowledgeBaseService\x12L\n\x0fProcessDocument\x12\x1b.rag.ProcessDocumentRequest\x1a\x1c.rag.ProcessDocumentResponse\x12I\n\x0e\x44\x65leteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponseB\x06Z\x04./pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11rag_service.proto\x12\x03rag\"0\n\x0b\x43hatRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"t\n\x0c\x43hatResponse\x12\x0e\n\x06\x61nswer\x18\x01 \x01(\t\x12%\n\x10source_documents\x18\x02 \x03(\x0b\x32\x0b.rag.Source\x12\x1a\n\x12processing_time_ms\x18\x03 \x01(\x01\x12\x11\n\tis_cached\x18\x04 \x01(\x08\"d\n\x06Source\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x13\n\x0bpage_number\x18\x03 \x01(\x05\x12\x0f\n\x07snippet\x18\x04 \x01(\t\x12\r\n\x05score\x18\x05 \x01(\x02\"\xa5\x01\n\x16ProcessDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x10\n\x08\x66ilename\x18\x03 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x17\n\x0forganization_id\x18\x05 \x01(\r\x12\x10\n\x08group_id\x18\x06 \x01(\r\x12\x10\n\x08owner_id\x18\x07 \x01(\r\"e\n\x17ProcessDocumentResponse\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x14\n\x0c\x63hunks_count\x18\x03 \x01(\x05\x12\x0f\n\x07message\x18\x04 \x01(\t\",\n\x15\x44\x65leteDocumentRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\"9\n\x16\x44\x65leteDocumentResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\"\x88\x01\n\x15\x44ocumentStatusRequest\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12-\n\x06status\x18\x02 \x01(\x0e\x32\x1d.rag.DocumentProcessingStatus\x12\x14\n\x0c\x63hunks_count\x18\x03 \x01(\x05\x12\x15\n\rerror_message\x18\x04 \x01(\t\":\n\x16\x44ocumentStatusResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t*\x95\x01\n\x18\x44ocumentProcessingStatus\x12\x1f\n\x1b\x44OCUMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n\x1a\x44OCUMENT_STATUS_PROCESSING\x10\x01\x12\x1d\n\x19\x44OCUMENT_STATUS_COMPLETED\x10\x02\x12\x19\n\x15\x44OCUMENT_STATUS_ERROR\x10\x03\x32<\n\x0b\x43hatService\x12-\n\x04\x43hat\x12\x10.rag.ChatRequest\x1a\x11.rag.ChatResponse0\x01\x32\xaf\x01\n\x14KnowledgeBaseService\x12L\n\x0fProcessDocument\x12\x1b.rag.ProcessDocumentRequest\x1a\x1c.rag.ProcessDocumentResponse\x12I\n\x0e\x44\x65leteDocument\x12\x1a.rag.DeleteDocumentRequest\x1a\x1b.rag.DeleteDocumentResponse2]\n\nRagService\x12O\n\x14UpdateDocumentStatus\x12\x1a.rag.DocumentStatusRequest\x1a\x1b.rag.DocumentStatusResponseB\x06Z\x04./pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,6 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'rag_service_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\004./pb'
+  _globals['_DOCUMENTPROCESSINGSTATUS']._serialized_start=872
+  _globals['_DOCUMENTPROCESSINGSTATUS']._serialized_end=1021
   _globals['_CHATREQUEST']._serialized_start=26
   _globals['_CHATREQUEST']._serialized_end=74
   _globals['_CHATRESPONSE']._serialized_start=76
@@ -46,8 +48,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_DELETEDOCUMENTREQUEST']._serialized_end=611
   _globals['_DELETEDOCUMENTRESPONSE']._serialized_start=613
   _globals['_DELETEDOCUMENTRESPONSE']._serialized_end=670
-  _globals['_CHATSERVICE']._serialized_start=672
-  _globals['_CHATSERVICE']._serialized_end=732
-  _globals['_KNOWLEDGEBASESERVICE']._serialized_start=735
-  _globals['_KNOWLEDGEBASESERVICE']._serialized_end=910
+  _globals['_DOCUMENTSTATUSREQUEST']._serialized_start=673
+  _globals['_DOCUMENTSTATUSREQUEST']._serialized_end=809
+  _globals['_DOCUMENTSTATUSRESPONSE']._serialized_start=811
+  _globals['_DOCUMENTSTATUSRESPONSE']._serialized_end=869
+  _globals['_CHATSERVICE']._serialized_start=1023
+  _globals['_CHATSERVICE']._serialized_end=1083
+  _globals['_KNOWLEDGEBASESERVICE']._serialized_start=1086
+  _globals['_KNOWLEDGEBASESERVICE']._serialized_end=1261
+  _globals['_RAGSERVICE']._serialized_start=1263
+  _globals['_RAGSERVICE']._serialized_end=1356
 # @@protoc_insertion_point(module_scope)

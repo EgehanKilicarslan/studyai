@@ -129,7 +129,7 @@ _KnowledgeBaseServiceDeleteDocumentType = typing_extensions.TypeVar(
 
 class KnowledgeBaseServiceStub(typing.Generic[_KnowledgeBaseServiceProcessDocumentType, _KnowledgeBaseServiceDeleteDocumentType]):
     """--------------------------------------------------------
-    Knowledge Base Service Definition
+    Knowledge Base Service Definition (Go -> Python)
     --------------------------------------------------------
     """
 
@@ -180,7 +180,7 @@ KnowledgeBaseServiceAsyncStub: typing_extensions.TypeAlias = KnowledgeBaseServic
 
 class KnowledgeBaseServiceServicer(metaclass=abc.ABCMeta):
     """--------------------------------------------------------
-    Knowledge Base Service Definition
+    Knowledge Base Service Definition (Go -> Python)
     --------------------------------------------------------
     """
 
@@ -205,3 +205,73 @@ class KnowledgeBaseServiceServicer(metaclass=abc.ABCMeta):
         """
 
 def add_KnowledgeBaseServiceServicer_to_server(servicer: KnowledgeBaseServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...
+
+_RagServiceUpdateDocumentStatusType = typing_extensions.TypeVar(
+    '_RagServiceUpdateDocumentStatusType',
+    grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.DocumentStatusRequest,
+        rag_service_pb2.DocumentStatusResponse,
+    ],
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.DocumentStatusRequest,
+        rag_service_pb2.DocumentStatusResponse,
+    ],
+    default=grpc.UnaryUnaryMultiCallable[
+        rag_service_pb2.DocumentStatusRequest,
+        rag_service_pb2.DocumentStatusResponse,
+    ],
+)
+
+class RagServiceStub(typing.Generic[_RagServiceUpdateDocumentStatusType]):
+    """--------------------------------------------------------
+    Rag Service Definition (Python -> Go)
+    This service is hosted by Go and called by Python workers.
+    --------------------------------------------------------
+    """
+
+    @typing.overload
+    def __init__(self: RagServiceStub[
+        grpc.UnaryUnaryMultiCallable[
+            rag_service_pb2.DocumentStatusRequest,
+            rag_service_pb2.DocumentStatusResponse,
+        ],
+    ], channel: grpc.Channel) -> None: ...
+
+    @typing.overload
+    def __init__(self: RagServiceStub[
+        grpc.aio.UnaryUnaryMultiCallable[
+            rag_service_pb2.DocumentStatusRequest,
+            rag_service_pb2.DocumentStatusResponse,
+        ],
+    ], channel: grpc.aio.Channel) -> None: ...
+
+    UpdateDocumentStatus: _RagServiceUpdateDocumentStatusType
+    """/ UpdateDocumentStatus is called by Python after processing completes.
+    / Go will update the documents table and handle quota refunds on ERROR.
+    """
+
+RagServiceAsyncStub: typing_extensions.TypeAlias = RagServiceStub[
+    grpc.aio.UnaryUnaryMultiCallable[
+        rag_service_pb2.DocumentStatusRequest,
+        rag_service_pb2.DocumentStatusResponse,
+    ],
+]
+
+class RagServiceServicer(metaclass=abc.ABCMeta):
+    """--------------------------------------------------------
+    Rag Service Definition (Python -> Go)
+    This service is hosted by Go and called by Python workers.
+    --------------------------------------------------------
+    """
+
+    @abc.abstractmethod
+    def UpdateDocumentStatus(
+        self,
+        request: rag_service_pb2.DocumentStatusRequest,
+        context: _ServicerContext,
+    ) -> typing.Union[rag_service_pb2.DocumentStatusResponse, collections.abc.Awaitable[rag_service_pb2.DocumentStatusResponse]]:
+        """/ UpdateDocumentStatus is called by Python after processing completes.
+        / Go will update the documents table and handle quota refunds on ERROR.
+        """
+
+def add_RagServiceServicer_to_server(servicer: RagServiceServicer, server: typing.Union[grpc.Server, grpc.aio.Server]) -> None: ...

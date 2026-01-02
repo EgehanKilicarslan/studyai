@@ -2,7 +2,6 @@
 """Client and server classes corresponding to protobuf-defined services."""
 
 import grpc
-import grpc.experimental
 
 from . import rag_service_pb2 as rag__service__pb2
 
@@ -116,7 +115,7 @@ class ChatService(object):
 
 class KnowledgeBaseServiceStub(object):
     """--------------------------------------------------------
-    Knowledge Base Service Definition
+    Knowledge Base Service Definition (Go -> Python)
     --------------------------------------------------------
     """
 
@@ -142,7 +141,7 @@ class KnowledgeBaseServiceStub(object):
 
 class KnowledgeBaseServiceServicer(object):
     """--------------------------------------------------------
-    Knowledge Base Service Definition
+    Knowledge Base Service Definition (Go -> Python)
     --------------------------------------------------------
     """
 
@@ -186,7 +185,7 @@ def add_KnowledgeBaseServiceServicer_to_server(servicer, server):
 # This class is part of an EXPERIMENTAL API.
 class KnowledgeBaseService(object):
     """--------------------------------------------------------
-    Knowledge Base Service Definition
+    Knowledge Base Service Definition (Go -> Python)
     --------------------------------------------------------
     """
 
@@ -239,6 +238,95 @@ class KnowledgeBaseService(object):
             "/rag.KnowledgeBaseService/DeleteDocument",
             rag__service__pb2.DeleteDocumentRequest.SerializeToString,
             rag__service__pb2.DeleteDocumentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+
+class RagServiceStub(object):
+    """--------------------------------------------------------
+    Rag Service Definition (Python -> Go)
+    This service is hosted by Go and called by Python workers.
+    --------------------------------------------------------
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.UpdateDocumentStatus = channel.unary_unary(
+            "/rag.RagService/UpdateDocumentStatus",
+            request_serializer=rag__service__pb2.DocumentStatusRequest.SerializeToString,
+            response_deserializer=rag__service__pb2.DocumentStatusResponse.FromString,
+            _registered_method=True,
+        )
+
+
+class RagServiceServicer(object):
+    """--------------------------------------------------------
+    Rag Service Definition (Python -> Go)
+    This service is hosted by Go and called by Python workers.
+    --------------------------------------------------------
+    """
+
+    def UpdateDocumentStatus(self, request, context):
+        """/ UpdateDocumentStatus is called by Python after processing completes.
+        / Go will update the documents table and handle quota refunds on ERROR.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+
+def add_RagServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+        "UpdateDocumentStatus": grpc.unary_unary_rpc_method_handler(
+            servicer.UpdateDocumentStatus,
+            request_deserializer=rag__service__pb2.DocumentStatusRequest.FromString,
+            response_serializer=rag__service__pb2.DocumentStatusResponse.SerializeToString,
+        ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler("rag.RagService", rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers("rag.RagService", rpc_method_handlers)
+
+
+# This class is part of an EXPERIMENTAL API.
+class RagService(object):
+    """--------------------------------------------------------
+    Rag Service Definition (Python -> Go)
+    This service is hosted by Go and called by Python workers.
+    --------------------------------------------------------
+    """
+
+    @staticmethod
+    def UpdateDocumentStatus(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/rag.RagService/UpdateDocumentStatus",
+            rag__service__pb2.DocumentStatusRequest.SerializeToString,
+            rag__service__pb2.DocumentStatusResponse.FromString,
             options,
             channel_credentials,
             insecure,

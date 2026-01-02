@@ -44,14 +44,15 @@ services:
       - studyai-network
     restart: unless-stopped
 
-  # 🌐 ORCHESTRATOR
+  # 🌐 ORCHESTRATOR (HTTP + gRPC Server)
   backend-go:
     build:
       context: ./backend-go
       dockerfile: Dockerfile
     container_name: studyai-go-gateway
     ports:
-      - "8080:8080"
+      - "8080:8080"   # HTTP API
+      - "50052:50052" # gRPC Server (Python -> Go)
     environment:
       - GIN_MODE=release
     env_file:

@@ -12,6 +12,10 @@ class Settings(BaseSettings):
 
     ai_service_port: int = Field(default=50051)
 
+    # Go gRPC service address (Python -> Go for status updates)
+    api_grpc_host: str = Field(default="backend-go")
+    api_grpc_port: int = Field(default=50052)
+
     postgresql_host: str = Field(default="db")
     postgresql_port: int = Field(default=5432)
     postgresql_user: str = Field(default="studyai_user")
@@ -88,6 +92,11 @@ class Settings(BaseSettings):
     def celery_result_backend(self) -> str:
         """Construct the Celery result backend URL (Redis)."""
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_database}"
+
+    @property
+    def api_grpc_addr(self) -> str:
+        """Construct the Go gRPC service address."""
+        return f"{self.api_grpc_host}:{self.api_grpc_port}"
 
 
 settings = Settings()

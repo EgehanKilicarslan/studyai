@@ -1,3 +1,4 @@
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -183,11 +184,13 @@ class TestProcessDocument:
                 owner_id=100,
             )
 
-            with patch(
-                "app.services.grpc.knowledge_base_service.process_document_task"
-            ) as mock_task:
-                mock_task.delay.return_value = mock_celery_task
+            # Mock the task module before the lazy import in ProcessDocument
+            mock_task = Mock()
+            mock_task.delay.return_value = mock_celery_task
+            mock_module = Mock()
+            mock_module.process_document_task = mock_task
 
+            with patch.dict(sys.modules, {"tasks.document_tasks": mock_module}):
                 response = await knowledge_base_service.ProcessDocument(request, mock_context)
 
                 assert response.status == "success"
@@ -231,11 +234,13 @@ class TestProcessDocument:
                 owner_id=100,
             )
 
-            with patch(
-                "app.services.grpc.knowledge_base_service.process_document_task"
-            ) as mock_task:
-                mock_task.delay.return_value = mock_celery_task
+            # Mock the task module before the lazy import in ProcessDocument
+            mock_task = Mock()
+            mock_task.delay.return_value = mock_celery_task
+            mock_module = Mock()
+            mock_module.process_document_task = mock_task
 
+            with patch.dict(sys.modules, {"tasks.document_tasks": mock_module}):
                 response = await knowledge_base_service.ProcessDocument(request, mock_context)
 
                 assert response.status == "success"
@@ -263,11 +268,13 @@ class TestProcessDocument:
                 owner_id=100,
             )
 
-            with patch(
-                "app.services.grpc.knowledge_base_service.process_document_task"
-            ) as mock_task:
-                mock_task.delay.side_effect = Exception("Celery broker connection error")
+            # Mock the task module before the lazy import in ProcessDocument
+            mock_task = Mock()
+            mock_task.delay.side_effect = Exception("Celery broker connection error")
+            mock_module = Mock()
+            mock_module.process_document_task = mock_task
 
+            with patch.dict(sys.modules, {"tasks.document_tasks": mock_module}):
                 response = await knowledge_base_service.ProcessDocument(request, mock_context)
 
                 assert response.status == "error"
