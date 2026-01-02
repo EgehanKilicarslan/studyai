@@ -238,9 +238,11 @@ func (h *KnowledgeBaseHandler) UploadHandler(c *gin.Context) {
 
 	// Step 4: Update status based on Python response
 	if resp.Status == "success" {
-		h.docService.UpdateDocumentStatus(doc.ID, models.DocumentStatusCompleted, int(resp.ChunksCount), nil)
+		// Set to PROCESSING since Python only queued the task
+		// The final COMPLETED status will be set via notify_status_update callback
+		h.docService.UpdateDocumentStatus(doc.ID, models.DocumentStatusProcessing, int(resp.ChunksCount), nil)
 
-		h.logger.Info("✅ [KnowledgeBaseHandler] Document processed successfully",
+		h.logger.Info("📝 [KnowledgeBaseHandler] Document queued for processing",
 			"doc_id", doc.ID,
 			"chunks_count", resp.ChunksCount,
 		)
