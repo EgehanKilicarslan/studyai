@@ -37,7 +37,7 @@ func NewRateLimiter(cfg *config.Config, logger *slog.Logger) (RateLimiter, error
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
 		Password: cfg.RedisPassword,
-		DB:       int(cfg.RedisDB),
+		DB:       int(cfg.RedisDatabase),
 	})
 
 	// Test connection

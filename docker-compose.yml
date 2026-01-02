@@ -1,5 +1,5 @@
 services:
-  # 🧠 AI BRAIN
+  # 🧠 AI BRAIN (gRPC Server)
   backend-python:
     build:
       context: ./backend-python
@@ -15,6 +15,31 @@ services:
     depends_on:
       vector-db:
         condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - studyai-network
+    restart: unless-stopped
+
+  # 🔄 CELERY WORKER (Async Document Processing)
+  celery-worker:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    container_name: studyai-celery-worker
+    command: celery -A celery_app worker --loglevel=info -Q document_processing,celery
+    env_file:
+      - .env
+    volumes:
+      - models:/home/appuser/.cache/models
+      - uploads:/tmp/studyai/uploads
+    depends_on:
+      vector-db:
+        condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - studyai-network
     restart: unless-stopped

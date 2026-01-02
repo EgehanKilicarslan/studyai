@@ -26,13 +26,13 @@ func NewRedisClient(cfg *config.Config, logger *slog.Logger) (*RedisClient, erro
 	logger.Info("🔌 [Redis] Connecting to Redis...",
 		"host", cfg.RedisHost,
 		"port", cfg.RedisPort,
-		"db", cfg.RedisDB,
+		"db", cfg.RedisDatabase,
 	)
 
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
 		Password: cfg.RedisPassword,
-		DB:       int(cfg.RedisDB),
+		DB:       int(cfg.RedisDatabase),
 	})
 
 	// Test connection

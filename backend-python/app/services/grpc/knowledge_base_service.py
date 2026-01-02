@@ -1,4 +1,3 @@
-import asyncio
 from pathlib import Path
 
 import grpc
@@ -7,6 +6,7 @@ from database.service import ChunkService
 from logger import AppLogger
 from pb import rag_service_pb2 as rs
 from pb import rag_service_pb2_grpc as rs_grpc
+from tasks.document_tasks import process_document_task
 
 from ..document_parser import DocumentParser
 from ..embedding_generator import EmbeddingGenerator
@@ -18,10 +18,12 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
     Knowledge Base Service for document processing.
 
     Go is the source of truth for documents (metadata, permissions, storage).
-    Python only handles:
-    - Parsing documents from file paths provided by Go
-    - Generating embeddings
-    - Storing vectors in Qdrant with multi-tenant metadata
+    Python handles:
+    - Receiving document processing requests from Go
+    - Triggering async processing via Celery
+    - Returning immediate acknowledgment to Go
+
+    Document processing happens asynchronously in Celery workers.
     """
 
     def __init__(
@@ -46,7 +48,7 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> rs.ProcessDocumentResponse:
         """
-        Process a document that was already saved to disk by Go.
+        Receive a document processing request from Go and trigger async processing.
 
         Go provides:
         - document_id: UUID assigned by Go (source of truth)
@@ -58,26 +60,30 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
         - owner_id: Document owner
 
         Python does:
+        - Validates the request
+        - Triggers Celery task for async processing
+        - Returns immediate acknowledgment to Go
+
+        The Celery worker will:
         - Parse the document from file_path
         - Generate embeddings
         - Store vectors in Qdrant with org/group metadata for filtering
+        - Update document status in PostgreSQL (COMPLETED or ERROR)
         """
         document_id = request.document_id
         file_path = request.file_path
         filename = request.filename
-        # content_type is provided by Go but not currently used in parsing
-        # (document_parser determines type from file extension)
         organization_id = request.organization_id
         group_id = request.group_id if request.group_id > 0 else None
         owner_id = request.owner_id
 
         self.logger.info(
-            f"[KnowledgeBaseService] ProcessDocument request: "
+            f"[KnowledgeBaseService] ProcessDocument request received: "
             f"doc_id={document_id}, file={filename}, org={organization_id}, group={group_id}"
         )
 
         try:
-            # 1) Verify file exists
+            # 1) Basic validation - verify file exists before queueing
             file_path_obj = Path(file_path)
             if not file_path_obj.exists():
                 self.logger.error(f"[KnowledgeBaseService] ❌ File not found: {file_path}")
@@ -88,7 +94,7 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
                     message=f"File not found: {file_path}",
                 )
 
-            # 2) Check file size
+            # 2) Check file size before queueing
             file_size = file_path_obj.stat().st_size
             if file_size > self.max_file_size:
                 self.logger.error(
@@ -101,72 +107,37 @@ class KnowledgeBaseService(rs_grpc.KnowledgeBaseServiceServicer):
                     message=f"File size ({file_size}) exceeds maximum ({self.max_file_size})",
                 )
 
-            # 3) Parse the document
-            self.logger.info(f"[KnowledgeBaseService] Parsing document: {filename}...")
-            try:
-                text_chunks, metadatas = await asyncio.to_thread(
-                    self.document_parser.parse_file, file_path, filename
-                )
-            except ValueError as ve:
-                self.logger.warning(f"⚠️ Validation Error: {ve}")
-                return rs.ProcessDocumentResponse(
-                    document_id=document_id,
-                    status="error",
-                    chunks_count=0,
-                    message=str(ve),
-                )
-
-            if not text_chunks:
-                return rs.ProcessDocumentResponse(
-                    document_id=document_id,
-                    status="warning",
-                    chunks_count=0,
-                    message="No text extracted from document.",
-                )
-
-            # 4) Store chunks in PostgreSQL database
+            # 3) Trigger async processing via Celery
             self.logger.info(
-                f"[KnowledgeBaseService] Storing {len(text_chunks)} chunks in database..."
-            )
-            stored_chunks = await self.chunk_service.store_chunks(
-                document_id=document_id,
-                text_chunks=text_chunks,
-                metadatas=metadatas,
+                f"[KnowledgeBaseService] Queueing document for async processing: {document_id}"
             )
 
-            # 5) Generate embeddings
-            self.logger.info(
-                f"[KnowledgeBaseService] Generating embeddings for {len(text_chunks)} chunks..."
-            )
-            vectors = await self.embedding_service.generate(text_chunks)
-
-            # 6) Upsert vectors into Qdrant with multi-tenant metadata
-            self.logger.info("[KnowledgeBaseService] Upserting vectors into vector store...")
-            chunk_ids = [str(chunk.id) for chunk in stored_chunks]
-            count = await self.vector_store.upsert_vectors_with_metadata(
-                vectors=vectors,
-                chunk_ids=chunk_ids,
+            # Send task to Celery worker
+            task = process_document_task.delay(
                 document_id=document_id,
-                filename=filename,
+                file_path=file_path,
                 organization_id=organization_id,
                 group_id=group_id,
                 owner_id=owner_id,
+                filename=filename,
             )
 
             self.logger.info(
-                f"[KnowledgeBaseService] ✅ Document processed successfully: "
-                f"doc_id={document_id}, chunks={count}"
+                f"[KnowledgeBaseService] ✅ Document queued for processing: "
+                f"doc_id={document_id}, task_id={task.id}"
             )
 
+            # Return success - the request was accepted and queued
+            # Go will track actual processing status via the document's status field in DB
             return rs.ProcessDocumentResponse(
                 document_id=document_id,
                 status="success",
-                chunks_count=count,
-                message=f"Successfully processed and indexed {count} chunks.",
+                chunks_count=0,
+                message=f"Document accepted for processing. Task ID: {task.id}",
             )
 
         except Exception as e:
-            self.logger.error(f"❌ ProcessDocument Critical Error: {e}")
+            self.logger.error(f"❌ ProcessDocument Error: {e}")
             return rs.ProcessDocumentResponse(
                 document_id=document_id,
                 status="error",

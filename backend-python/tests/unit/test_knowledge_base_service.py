@@ -1,6 +1,6 @@
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from app.services.grpc.knowledge_base_service import KnowledgeBaseService
@@ -60,6 +60,14 @@ def mock_context():
     """Create a mock gRPC context."""
     context = Mock()
     return context
+
+
+@pytest.fixture
+def mock_celery_task():
+    """Create a mock Celery task result."""
+    task = Mock()
+    task.id = "celery-task-uuid-123"
+    return task
 
 
 @pytest.fixture
@@ -155,13 +163,10 @@ class TestProcessDocument:
     async def test_process_document_success(
         self,
         knowledge_base_service,
-        mock_chunk_service,
-        mock_parser,
-        mock_embedder,
-        mock_vector_store,
+        mock_celery_task,
         mock_context,
     ):
-        """Test successful document processing."""
+        """Test successful document processing queues Celery task."""
         # Create a temp file to process
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
             f.write(b"PDF content here")
@@ -178,29 +183,28 @@ class TestProcessDocument:
                 owner_id=100,
             )
 
-            response = await knowledge_base_service.ProcessDocument(request, mock_context)
+            with patch(
+                "app.services.grpc.knowledge_base_service.process_document_task"
+            ) as mock_task:
+                mock_task.delay.return_value = mock_celery_task
 
-            assert response.status == "success"
-            assert response.document_id == "doc-123"
-            assert response.chunks_count == 5  # From mock_vector_store return value
+                response = await knowledge_base_service.ProcessDocument(request, mock_context)
 
-            # Verify the processing pipeline was called correctly
-            mock_parser.parse_file.assert_called_once()
-            mock_chunk_service.store_chunks.assert_called_once_with(
-                document_id="doc-123",
-                text_chunks=["chunk1", "chunk2"],
-                metadatas=[{"page": 1}, {"page": 2}],
-            )
-            mock_embedder.generate.assert_called_once_with(["chunk1", "chunk2"])
-            mock_vector_store.upsert_vectors_with_metadata.assert_called_once_with(
-                vectors=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
-                chunk_ids=["chunk-uuid-1", "chunk-uuid-2"],
-                document_id="doc-123",
-                filename="test.pdf",
-                organization_id=1,
-                group_id=10,
-                owner_id=100,
-            )
+                assert response.status == "success"
+                assert response.document_id == "doc-123"
+                # chunks_count is 0 because actual processing happens in Celery
+                assert response.chunks_count == 0
+                assert "celery-task-uuid-123" in response.message
+
+                # Verify Celery task was queued with correct arguments
+                mock_task.delay.assert_called_once_with(
+                    document_id="doc-123",
+                    file_path=temp_path,
+                    organization_id=1,
+                    group_id=10,
+                    owner_id=100,
+                    filename="test.pdf",
+                )
         finally:
             Path(temp_path).unlink()
 
@@ -208,10 +212,10 @@ class TestProcessDocument:
     async def test_process_document_org_wide(
         self,
         knowledge_base_service,
-        mock_vector_store,
+        mock_celery_task,
         mock_context,
     ):
-        """Test processing org-wide document (group_id=0)."""
+        """Test processing org-wide document (group_id=0) passes None to Celery."""
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
             f.write(b"PDF content")
             temp_path = f.name
@@ -227,80 +231,23 @@ class TestProcessDocument:
                 owner_id=100,
             )
 
-            response = await knowledge_base_service.ProcessDocument(request, mock_context)
+            with patch(
+                "app.services.grpc.knowledge_base_service.process_document_task"
+            ) as mock_task:
+                mock_task.delay.return_value = mock_celery_task
 
-            assert response.status == "success"
-            # Verify group_id is passed as None for org-wide documents
-            call_args = mock_vector_store.upsert_vectors_with_metadata.call_args
-            assert call_args.kwargs["group_id"] is None
+                response = await knowledge_base_service.ProcessDocument(request, mock_context)
+
+                assert response.status == "success"
+                # Verify group_id is passed as None for org-wide documents
+                call_args = mock_task.delay.call_args
+                assert call_args.kwargs["group_id"] is None
         finally:
             Path(temp_path).unlink()
 
     @pytest.mark.asyncio
-    async def test_process_document_parser_error(
-        self, knowledge_base_service, mock_parser, mock_context
-    ):
-        """Test ProcessDocument handles parser errors."""
-        mock_parser.parse_file = Mock(side_effect=ValueError("Unsupported file type"))
-
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".xyz", delete=False) as f:
-            f.write(b"content")
-            temp_path = f.name
-
-        try:
-            request = rs.ProcessDocumentRequest(
-                document_id="doc-123",
-                file_path=temp_path,
-                filename="test.xyz",
-                content_type="application/xyz",
-                organization_id=1,
-                group_id=0,
-                owner_id=100,
-            )
-
-            response = await knowledge_base_service.ProcessDocument(request, mock_context)
-
-            assert response.status == "error"
-            assert "Unsupported file type" in response.message
-        finally:
-            Path(temp_path).unlink()
-
-    @pytest.mark.asyncio
-    async def test_process_document_no_text_extracted(
-        self, knowledge_base_service, mock_parser, mock_context
-    ):
-        """Test ProcessDocument returns warning when no text is extracted."""
-        mock_parser.parse_file = Mock(return_value=([], []))
-
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
-            f.write(b"empty pdf")
-            temp_path = f.name
-
-        try:
-            request = rs.ProcessDocumentRequest(
-                document_id="doc-123",
-                file_path=temp_path,
-                filename="empty.pdf",
-                content_type="application/pdf",
-                organization_id=1,
-                group_id=0,
-                owner_id=100,
-            )
-
-            response = await knowledge_base_service.ProcessDocument(request, mock_context)
-
-            assert response.status == "warning"
-            assert "No text extracted" in response.message
-        finally:
-            Path(temp_path).unlink()
-
-    @pytest.mark.asyncio
-    async def test_process_document_embedding_error(
-        self, knowledge_base_service, mock_embedder, mock_context
-    ):
-        """Test ProcessDocument handles embedding generation errors."""
-        mock_embedder.generate = AsyncMock(side_effect=Exception("Embedding service error"))
-
+    async def test_process_document_celery_error(self, knowledge_base_service, mock_context):
+        """Test ProcessDocument handles Celery errors gracefully."""
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
             f.write(b"content")
             temp_path = f.name
@@ -316,41 +263,15 @@ class TestProcessDocument:
                 owner_id=100,
             )
 
-            response = await knowledge_base_service.ProcessDocument(request, mock_context)
+            with patch(
+                "app.services.grpc.knowledge_base_service.process_document_task"
+            ) as mock_task:
+                mock_task.delay.side_effect = Exception("Celery broker connection error")
 
-            assert response.status == "error"
-            assert "Embedding service error" in response.message
-        finally:
-            Path(temp_path).unlink()
+                response = await knowledge_base_service.ProcessDocument(request, mock_context)
 
-    @pytest.mark.asyncio
-    async def test_process_document_vector_store_error(
-        self, knowledge_base_service, mock_vector_store, mock_context
-    ):
-        """Test ProcessDocument handles vector store errors."""
-        mock_vector_store.upsert_vectors_with_metadata = AsyncMock(
-            side_effect=Exception("Qdrant connection error")
-        )
-
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
-            f.write(b"content")
-            temp_path = f.name
-
-        try:
-            request = rs.ProcessDocumentRequest(
-                document_id="doc-123",
-                file_path=temp_path,
-                filename="test.pdf",
-                content_type="application/pdf",
-                organization_id=1,
-                group_id=0,
-                owner_id=100,
-            )
-
-            response = await knowledge_base_service.ProcessDocument(request, mock_context)
-
-            assert response.status == "error"
-            assert "Qdrant connection error" in response.message
+                assert response.status == "error"
+                assert "Celery broker connection error" in response.message
         finally:
             Path(temp_path).unlink()
 

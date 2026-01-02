@@ -27,7 +27,7 @@ type Config struct {
 	RedisHost              string
 	RedisPort              int64
 	RedisPassword          string
-	RedisDB                int64
+	RedisDatabase          int64
 	ChatHistoryTTL         int64 // Chat history TTL in seconds
 }
 
@@ -51,7 +51,7 @@ func LoadConfig() *Config {
 		RedisHost:              getEnv("REDIS_HOST", "redis"),                     // Default redis
 		RedisPort:              getEnvAsInt64("REDIS_PORT", 6379),                 // Default 6379
 		RedisPassword:          getEnv("REDIS_PASSWORD", ""),                      // Default empty
-		RedisDB:                getEnvAsInt64("REDIS_DB", 0),                      // Default 0
+		RedisDatabase:          getEnvAsInt64("REDIS_DATABASE", 0),                // Default 0
 		ChatHistoryTTL:         getEnvAsInt64("CHAT_HISTORY_TTL", 3600),           // Default 1 hour (3600 seconds)
 	}
 }
