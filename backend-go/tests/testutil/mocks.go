@@ -19,6 +19,7 @@ import (
 	grpcClient "github.com/EgehanKilicarslan/studyai/backend-go/internal/grpc"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/handler"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/middleware"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/worker"
 	pb "github.com/EgehanKilicarslan/studyai/backend-go/pb"
 )
 
@@ -773,7 +774,10 @@ func SetupRouterWithMocks(
 	mockChatRepo.On("CreateMessage", mock.Anything).Return(nil)
 	mockChatRepo.On("GetRecentMessages", mock.Anything, mock.Anything).Return([]models.ChatMessage{}, nil)
 
-	chatHandler := handler.NewChatHandler(grpcCli, cfg, logger, mockRateLimiter, mockOrgRepo, mockGroupRepo, mockRedisClient, mockChatRepo)
+	// Create worker pool for background tasks
+	workerPool := worker.NewPool(logger)
+
+	chatHandler := handler.NewChatHandler(grpcCli, cfg, logger, mockRateLimiter, mockOrgRepo, mockGroupRepo, mockRedisClient, mockChatRepo, workerPool)
 	kbHandler := handler.NewKnowledgeBaseHandler(grpcCli, docService, mockGroupRepo, cfg, logger)
 	authHandler := handler.NewAuthHandler(authService, logger)
 	var groupHandler *handler.GroupHandler
