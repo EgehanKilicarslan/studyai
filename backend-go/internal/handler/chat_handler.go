@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,7 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database"
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/models"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/database/repository"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/grpc"
 	"github.com/EgehanKilicarslan/studyai/backend-go/internal/middleware"
@@ -27,6 +32,8 @@ type ChatHandler struct {
 	rateLimiter middleware.RateLimiter
 	orgRepo     repository.OrganizationRepository
 	groupRepo   repository.GroupRepository
+	redisClient database.ChatHistoryStore
+	chatRepo    repository.ChatRepository
 }
 
 // NewChatHandler injects dependencies (Dependency Injection Go Style)
@@ -37,6 +44,8 @@ func NewChatHandler(
 	rateLimiter middleware.RateLimiter,
 	orgRepo repository.OrganizationRepository,
 	groupRepo repository.GroupRepository,
+	redisClient database.ChatHistoryStore,
+	chatRepo repository.ChatRepository,
 ) *ChatHandler {
 	return &ChatHandler{
 		services:    services,
@@ -45,6 +54,8 @@ func NewChatHandler(
 		rateLimiter: rateLimiter,
 		orgRepo:     orgRepo,
 		groupRepo:   groupRepo,
+		redisClient: redisClient,
+		chatRepo:    chatRepo,
 	}
 }
 
@@ -173,10 +184,62 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 		"user_id", userID,
 	)
 
-	// 1. gRPC Request
+	// Parse or generate session ID
+	var sessionID uuid.UUID
+	var err error
+	if reqBody.SessionID != "" {
+		sessionID, err = uuid.Parse(reqBody.SessionID)
+		if err != nil {
+			h.logger.Error("❌ [Handler] Invalid session ID format",
+				"session_id", reqBody.SessionID,
+				"error", err,
+			)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID format"})
+			return
+		}
+	} else {
+		// Generate new session ID if not provided
+		sessionID = uuid.New()
+		h.logger.Info("🆕 [Handler] Generated new session ID", "session_id", sessionID)
+	}
+
+	// Ensure organization ID is set (required for sessions)
+	if orgIDUint == 0 {
+		h.logger.Error("❌ [Handler] Organization ID is required for chat sessions")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Organization ID is required"})
+		return
+	}
+
+	// Get or create session in database
+	_, _, err = h.chatRepo.GetOrCreateSession(sessionID, userIDUint, orgIDUint)
+	if err != nil {
+		h.logger.Error("❌ [Handler] Failed to get/create session",
+			"session_id", sessionID,
+			"error", err,
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize session"})
+		return
+	}
+
+	// Fetch chat history (hybrid approach: Redis -> Postgres)
+	chatHistory, err := h.getChatHistory(c.Request.Context(), sessionID)
+	if err != nil {
+		h.logger.Warn("⚠️ [Handler] Failed to fetch chat history, continuing without history",
+			"session_id", sessionID,
+			"error", err,
+		)
+		chatHistory = []models.ChatMessage{}
+	}
+
+	h.logger.Info("📚 [Handler] Loaded chat history",
+		"session_id", sessionID,
+		"message_count", len(chatHistory),
+	)
+
+	// 1. gRPC Request with chat history
 	grpcReq := &pb.ChatRequest{
 		Query:     reqBody.Query,
-		SessionId: reqBody.SessionID,
+		SessionId: sessionID.String(),
 	}
 
 	// Create context with timeout and user ID metadata
@@ -212,6 +275,26 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 		}
 	}
 
+	// Add chat history to metadata (as JSON array)
+	if len(chatHistory) > 0 {
+		historyJSON := formatChatHistory(chatHistory)
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-chat-history", historyJSON)
+		h.logger.Debug("📤 [Handler] Added chat history to gRPC metadata",
+			"session_id", sessionID,
+			"history_length", len(chatHistory),
+		)
+	}
+
+	// Save user message before calling gRPC
+	userMessage := models.ChatMessage{
+		SessionID: sessionID,
+		Role:      "user",
+		Content:   reqBody.Query,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	h.saveChatMessage(c.Request.Context(), userMessage)
+
 	stream, err := h.services.ChatService.Chat(ctx, grpcReq)
 	if err != nil {
 		h.logger.Error("❌ [Handler] Failed to call RAG service",
@@ -237,6 +320,7 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 
 	// 3. Stream Responses
 	messageCount := 0
+	var assistantResponse strings.Builder
 	c.Stream(func(w io.Writer) bool {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -244,6 +328,23 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 				"messages_sent", messageCount,
 				"query", reqBody.Query,
 			)
+
+			// Save assistant's complete response
+			if assistantResponse.Len() > 0 {
+				assistantMessage := models.ChatMessage{
+					SessionID: sessionID,
+					Role:      "assistant",
+					Content:   assistantResponse.String(),
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				}
+				h.saveChatMessage(c.Request.Context(), assistantMessage)
+				h.logger.Debug("💬 [Handler] Saved assistant response",
+					"session_id", sessionID,
+					"length", assistantResponse.Len(),
+				)
+			}
+
 			return false // Stop streaming on EOF
 		}
 		if err != nil {
@@ -255,6 +356,10 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 		}
 
 		messageCount++
+
+		// Accumulate assistant's response
+		assistantResponse.WriteString(resp.Answer)
+
 		c.SSEvent("message", gin.H{
 			"answer":  resp.Answer,
 			"sources": resp.SourceDocuments,
@@ -269,4 +374,103 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 func getNextMidnightUTC() time.Time {
 	now := time.Now().UTC()
 	return time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+}
+
+// getChatHistory fetches chat history using hybrid approach (Redis -> Postgres)
+func (h *ChatHandler) getChatHistory(ctx context.Context, sessionID uuid.UUID) ([]models.ChatMessage, error) {
+	// Try Redis first
+	messages, err := h.redisClient.GetChatHistory(ctx, sessionID)
+	if err == nil && len(messages) > 0 {
+		h.logger.Debug("✅ [Handler] Chat history loaded from Redis",
+			"session_id", sessionID,
+			"count", len(messages),
+		)
+		return messages, nil
+	}
+
+	// Redis miss - fetch from Postgres
+	h.logger.Debug("🔄 [Handler] Redis miss, fetching from Postgres",
+		"session_id", sessionID,
+	)
+
+	messages, err = h.chatRepo.GetRecentMessages(sessionID, 20)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages from Postgres: %w", err)
+	}
+
+	// Populate Redis cache asynchronously (fire and forget)
+	if len(messages) > 0 {
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := h.redisClient.SetChatHistory(bgCtx, sessionID, messages); err != nil {
+				h.logger.Warn("⚠️ [Handler] Failed to populate Redis cache",
+					"session_id", sessionID,
+					"error", err,
+				)
+			}
+		}()
+	}
+
+	h.logger.Debug("✅ [Handler] Chat history loaded from Postgres",
+		"session_id", sessionID,
+		"count", len(messages),
+	)
+
+	return messages, nil
+}
+
+// saveChatMessage saves a message to both Redis and Postgres
+func (h *ChatHandler) saveChatMessage(ctx context.Context, message models.ChatMessage) {
+	// Push to Redis immediately (synchronous for speed)
+	if err := h.redisClient.AppendChatMessage(ctx, message.SessionID, message); err != nil {
+		h.logger.Error("❌ [Handler] Failed to append message to Redis",
+			"session_id", message.SessionID,
+			"error", err,
+		)
+	}
+
+	// Save to Postgres asynchronously
+	go func() {
+		if err := h.chatRepo.CreateMessage(&message); err != nil {
+			h.logger.Error("❌ [Handler] Failed to save message to Postgres",
+				"session_id", message.SessionID,
+				"message_id", message.ID,
+				"error", err,
+			)
+		} else {
+			h.logger.Debug("💾 [Handler] Message saved to Postgres",
+				"session_id", message.SessionID,
+				"message_id", message.ID,
+			)
+		}
+	}()
+}
+
+// formatChatHistory converts messages to JSON format for gRPC metadata
+func formatChatHistory(messages []models.ChatMessage) string {
+	if len(messages) == 0 {
+		return "[]"
+	}
+
+	type historyEntry struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+
+	history := make([]historyEntry, len(messages))
+	for i, msg := range messages {
+		history[i] = historyEntry{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	data, err := json.Marshal(history)
+	if err != nil {
+		return "[]"
+	}
+
+	return string(data)
 }

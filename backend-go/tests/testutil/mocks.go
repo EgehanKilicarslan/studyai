@@ -562,6 +562,91 @@ func (m *MockKnowledgeBaseServiceClient) DeleteDocument(ctx context.Context, in 
 	return args.Get(0).(*pb.DeleteDocumentResponse), args.Error(1)
 }
 
+// ==================== MOCK CHAT REPOSITORY ====================
+
+// MockChatRepository implements repository.ChatRepository for testing
+type MockChatRepository struct {
+	mock.Mock
+}
+
+func (m *MockChatRepository) CreateSession(session *models.ChatSession) error {
+	args := m.Called(session)
+	return args.Error(0)
+}
+
+func (m *MockChatRepository) GetSession(sessionID uuid.UUID) (*models.ChatSession, error) {
+	args := m.Called(sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.ChatSession), args.Error(1)
+}
+
+func (m *MockChatRepository) GetUserSessions(userID uint, organizationID uint, limit int) ([]models.ChatSession, error) {
+	args := m.Called(userID, organizationID, limit)
+	return args.Get(0).([]models.ChatSession), args.Error(1)
+}
+
+func (m *MockChatRepository) GetOrCreateSession(sessionID uuid.UUID, userID uint, organizationID uint) (*models.ChatSession, bool, error) {
+	args := m.Called(sessionID, userID, organizationID)
+	if args.Get(0) == nil {
+		return nil, args.Bool(1), args.Error(2)
+	}
+	return args.Get(0).(*models.ChatSession), args.Bool(1), args.Error(2)
+}
+
+func (m *MockChatRepository) CreateMessage(message *models.ChatMessage) error {
+	args := m.Called(message)
+	return args.Error(0)
+}
+
+func (m *MockChatRepository) GetSessionMessages(sessionID uuid.UUID, limit int) ([]models.ChatMessage, error) {
+	args := m.Called(sessionID, limit)
+	return args.Get(0).([]models.ChatMessage), args.Error(1)
+}
+
+func (m *MockChatRepository) GetRecentMessages(sessionID uuid.UUID, limit int) ([]models.ChatMessage, error) {
+	args := m.Called(sessionID, limit)
+	return args.Get(0).([]models.ChatMessage), args.Error(1)
+}
+
+func (m *MockChatRepository) DeleteSessionMessages(sessionID uuid.UUID) error {
+	args := m.Called(sessionID)
+	return args.Error(0)
+}
+
+// ==================== MOCK REDIS CLIENT ====================
+
+// MockRedisClient implements a mock Redis client for testing
+type MockRedisClient struct {
+	mock.Mock
+}
+
+func (m *MockRedisClient) GetChatHistory(ctx context.Context, sessionID uuid.UUID) ([]models.ChatMessage, error) {
+	args := m.Called(ctx, sessionID)
+	return args.Get(0).([]models.ChatMessage), args.Error(1)
+}
+
+func (m *MockRedisClient) SetChatHistory(ctx context.Context, sessionID uuid.UUID, messages []models.ChatMessage) error {
+	args := m.Called(ctx, sessionID, messages)
+	return args.Error(0)
+}
+
+func (m *MockRedisClient) AppendChatMessage(ctx context.Context, sessionID uuid.UUID, message models.ChatMessage) error {
+	args := m.Called(ctx, sessionID, message)
+	return args.Error(0)
+}
+
+func (m *MockRedisClient) DeleteChatHistory(ctx context.Context, sessionID uuid.UUID) error {
+	args := m.Called(ctx, sessionID)
+	return args.Error(0)
+}
+
+func (m *MockRedisClient) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 // ==================== MOCK DOCUMENT SERVICE ====================
 
 // MockDocumentService implements service.DocumentService for testing
@@ -676,7 +761,19 @@ func SetupRouterWithMocks(
 	mockGroupRepo := new(MockGroupRepository)
 	mockGroupRepo.On("GetUserGroupsInOrganization", mock.Anything, mock.Anything).Return([]uint{1}, nil)
 
-	chatHandler := handler.NewChatHandler(grpcCli, cfg, logger, mockRateLimiter, mockOrgRepo, mockGroupRepo)
+	// Create mock Redis client
+	mockRedisClient := new(MockRedisClient)
+	mockRedisClient.On("GetChatHistory", mock.Anything, mock.Anything).Return([]models.ChatMessage{}, nil)
+	mockRedisClient.On("AppendChatMessage", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockRedisClient.On("Close").Return(nil)
+
+	// Create mock chat repository
+	mockChatRepo := new(MockChatRepository)
+	mockChatRepo.On("GetOrCreateSession", mock.Anything, mock.Anything, mock.Anything).Return(&models.ChatSession{}, true, nil)
+	mockChatRepo.On("CreateMessage", mock.Anything).Return(nil)
+	mockChatRepo.On("GetRecentMessages", mock.Anything, mock.Anything).Return([]models.ChatMessage{}, nil)
+
+	chatHandler := handler.NewChatHandler(grpcCli, cfg, logger, mockRateLimiter, mockOrgRepo, mockGroupRepo, mockRedisClient, mockChatRepo)
 	kbHandler := handler.NewKnowledgeBaseHandler(grpcCli, docService, mockGroupRepo, cfg, logger)
 	authHandler := handler.NewAuthHandler(authService, logger)
 	var groupHandler *handler.GroupHandler

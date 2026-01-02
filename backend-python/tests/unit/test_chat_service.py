@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 from app.services.grpc.chat_service import (
     ChatService,
+    get_chat_history_from_metadata,
     get_tenant_context_from_metadata,
     get_user_id_from_context,
 )
@@ -169,6 +170,64 @@ class TestGetTenantContextFromMetadata:
         org_id, group_ids = get_tenant_context_from_metadata(context)
         assert org_id is None
         assert group_ids == [1, 2]
+
+
+class TestGetChatHistoryFromMetadata:
+    """Tests for the get_chat_history_from_metadata helper function."""
+
+    def test_valid_chat_history(self):
+        """Test extracting valid chat history from metadata."""
+        context = Mock()
+        history_json = (
+            '[{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi there!"}]'
+        )
+        context.invocation_metadata.return_value = [("x-chat-history", history_json)]
+
+        history = get_chat_history_from_metadata(context)
+        assert len(history) == 2
+        assert history[0] == {"role": "user", "content": "Hello"}
+        assert history[1] == {"role": "assistant", "content": "Hi there!"}
+
+    def test_empty_chat_history(self):
+        """Test when chat history is empty."""
+        context = Mock()
+        context.invocation_metadata.return_value = [("x-chat-history", "[]")]
+
+        history = get_chat_history_from_metadata(context)
+        assert history == []
+
+    def test_missing_chat_history(self):
+        """Test when chat history header is not present."""
+        context = Mock()
+        context.invocation_metadata.return_value = []
+
+        history = get_chat_history_from_metadata(context)
+        assert history == []
+
+    def test_invalid_json(self):
+        """Test when chat history contains invalid JSON."""
+        context = Mock()
+        context.invocation_metadata.return_value = [("x-chat-history", "invalid json")]
+
+        history = get_chat_history_from_metadata(context)
+        assert history == []
+
+    def test_malformed_history_messages(self):
+        """Test when history messages don't have required fields."""
+        context = Mock()
+        history_json = '[{"role": "user"}, {"content": "missing role"}]'
+        context.invocation_metadata.return_value = [("x-chat-history", history_json)]
+
+        history = get_chat_history_from_metadata(context)
+        assert history == []  # Both messages should be filtered out
+
+    def test_none_metadata(self):
+        """Test when invocation_metadata returns None."""
+        context = Mock()
+        context.invocation_metadata.return_value = None
+
+        history = get_chat_history_from_metadata(context)
+        assert history == []
 
 
 class TestChatService:

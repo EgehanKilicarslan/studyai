@@ -47,7 +47,7 @@ func TestChatHandler(t *testing.T) {
 	}{
 		{
 			name:        "success",
-			requestBody: map[string]string{"query": "Hi", "session_id": "1"},
+			requestBody: map[string]string{"query": "Hi", "session_id": "550e8400-e29b-41d4-a716-446655440000"},
 			authHeader:  "Bearer test-token",
 			setupMocks: func(client *testutil.MockChatServiceClient, stream *testutil.MockChatStream) {
 				stream.On("Recv").Return(&pb.ChatResponse{Answer: "Hello from Go Test"}, nil).Once()
@@ -72,7 +72,7 @@ func TestChatHandler(t *testing.T) {
 		},
 		{
 			name:           "missing query",
-			requestBody:    map[string]string{"session_id": "123"},
+			requestBody:    map[string]string{"session_id": "550e8400-e29b-41d4-a716-446655440000"},
 			authHeader:     "Bearer test-token",
 			setupMocks:     func(client *testutil.MockChatServiceClient, stream *testutil.MockChatStream) {},
 			expectedStatus: 400,
@@ -82,14 +82,14 @@ func TestChatHandler(t *testing.T) {
 		},
 		{
 			name:           "missing auth header",
-			requestBody:    map[string]string{"query": "Hi", "session_id": "1"},
+			requestBody:    map[string]string{"query": "Hi", "session_id": "550e8400-e29b-41d4-a716-446655440000"},
 			authHeader:     "",
 			setupMocks:     func(client *testutil.MockChatServiceClient, stream *testutil.MockChatStream) {},
 			expectedStatus: 401,
 		},
 		{
 			name:        "grpc error",
-			requestBody: map[string]string{"query": "test", "session_id": "123"},
+			requestBody: map[string]string{"query": "test", "session_id": "550e8400-e29b-41d4-a716-446655440000"},
 			authHeader:  "Bearer test-token",
 			setupMocks: func(client *testutil.MockChatServiceClient, stream *testutil.MockChatStream) {
 				client.On("Chat", mock.Anything, mock.Anything).Return((*testutil.MockChatStream)(nil), errors.New("connection failed"))
@@ -98,7 +98,7 @@ func TestChatHandler(t *testing.T) {
 		},
 		{
 			name:        "stream error",
-			requestBody: map[string]string{"query": "test", "session_id": "123"},
+			requestBody: map[string]string{"query": "test", "session_id": "550e8400-e29b-41d4-a716-446655440000"},
 			authHeader:  "Bearer test-token",
 			setupMocks: func(client *testutil.MockChatServiceClient, stream *testutil.MockChatStream) {
 				stream.On("Recv").Return((*pb.ChatResponse)(nil), io.ErrUnexpectedEOF).Once()
@@ -131,6 +131,7 @@ func TestChatHandler(t *testing.T) {
 
 			req, _ := http.NewRequest("POST", testutil.ChatEndpoint, body)
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("x-organization-id", "1") // Add organization ID for chat handler
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}

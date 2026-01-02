@@ -41,14 +41,28 @@ func main() {
 	groupRepo := repository.NewGroupRepository(db)
 	documentRepo := repository.NewDocumentRepository(db)
 	orgRepo := repository.NewOrganizationRepository(db)
+	chatRepo := repository.NewChatRepository(db)
 
-	// 5. Initialize Services
+	// 5. Initialize Redis Client
+	redisClient, err := database.NewRedisClient(cfg, appLogger)
+	if err != nil {
+		appLogger.Warn("⚠️ Failed to connect to Redis for chat history", "error", err)
+		appLogger.Info("💡 Chat history will only use Postgres (no Redis caching)")
+		// Continue without Redis - chat will still work with Postgres only
+	}
+	defer func() {
+		if redisClient != nil {
+			redisClient.Close()
+		}
+	}()
+
+	// 6. Initialize Services
 	authService := service.NewAuthService(userRepo, refreshTokenRepo, cfg, appLogger)
 	groupService := service.NewGroupService(groupRepo, orgRepo, userRepo, appLogger)
 	documentService := service.NewDocumentService(documentRepo, groupRepo, orgRepo, cfg, appLogger)
 	orgService := service.NewOrganizationService(orgRepo, groupRepo, userRepo, appLogger)
 
-	// 6. Initialize Handlers & Middleware
+	// 7. Initialize Handlers & Middleware
 	authHandler := handler.NewAuthHandler(authService, appLogger)
 	groupHandler := handler.NewGroupHandler(groupService, appLogger)
 	adminHandler := handler.NewAdminHandler(orgService, groupService, appLogger)
@@ -70,7 +84,7 @@ func main() {
 	defer grpcClient.Close()
 
 	// 9. Setup Chat and KnowledgeBase Handlers and Router
-	chatHandler := handler.NewChatHandler(grpcClient, cfg, appLogger, rateLimiter, orgRepo, groupRepo)
+	chatHandler := handler.NewChatHandler(grpcClient, cfg, appLogger, rateLimiter, orgRepo, groupRepo, redisClient, chatRepo)
 	knowledgeBaseHandler := handler.NewKnowledgeBaseHandler(grpcClient, documentService, groupRepo, cfg, appLogger)
 
 	r := api.SetupRouter(chatHandler, knowledgeBaseHandler, authHandler, groupHandler, adminHandler, authMiddleware)

@@ -1,3 +1,4 @@
+import json
 import time
 from typing import AsyncGenerator
 
@@ -16,6 +17,7 @@ from ..vector_store import VectorStore
 USER_ID_METADATA_KEY = "x-user-id"
 ORGANIZATION_ID_METADATA_KEY = "x-organization-id"
 GROUP_IDS_METADATA_KEY = "x-group-ids"
+CHAT_HISTORY_METADATA_KEY = "x-chat-history"
 
 
 def get_user_id_from_context(context: grpc.aio.ServicerContext) -> int | None:
@@ -69,6 +71,44 @@ def get_tenant_context_from_metadata(
     return org_id, group_ids
 
 
+def get_chat_history_from_metadata(
+    context: grpc.aio.ServicerContext,
+) -> list[dict[str, str]]:
+    """
+    Extract chat history from gRPC metadata headers.
+
+    The chat history is passed as a JSON string in the x-chat-history header.
+    Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
+
+    Returns:
+        list[dict[str, str]]: List of message dictionaries with 'role' and 'content' keys
+    """
+    invocation_metadata = context.invocation_metadata()
+    if invocation_metadata is None:
+        return []
+
+    metadata = {key: value for key, value in invocation_metadata}
+    history_json = metadata.get(CHAT_HISTORY_METADATA_KEY)
+
+    if not history_json:
+        return []
+
+    try:
+        history = json.loads(history_json)
+        # Validate format
+        if isinstance(history, list):
+            # Filter to only include valid messages with role and content
+            return [
+                {"role": msg["role"], "content": msg["content"]}
+                for msg in history
+                if isinstance(msg, dict) and "role" in msg and "content" in msg
+            ]
+        return []
+    except (json.JSONDecodeError, KeyError, TypeError):
+        # Log parsing error but don't fail the request
+        return []
+
+
 class ChatService(rs_grpc.ChatServiceServicer):
     def __init__(
         self,
@@ -105,9 +145,13 @@ class ChatService(rs_grpc.ChatServiceServicer):
             yield rs.ChatResponse(answer="Unauthorized: Organization context not provided.")
             return
 
+        # Extract chat history from metadata
+        chat_history = get_chat_history_from_metadata(context)
+
         self.logger.info(
             f"[ChatService] Question: {request.query} | Session: {request.session_id} | "
-            f"User: {user_id} | Org: {organization_id} | Groups: {group_ids}"
+            f"User: {user_id} | Org: {organization_id} | Groups: {group_ids} | "
+            f"History: {len(chat_history)} messages"
         )
 
         try:
@@ -172,12 +216,12 @@ class ChatService(rs_grpc.ChatServiceServicer):
                 f"[ChatService] Selected {len(context_docs)} high-quality docs after rerank."
             )
 
-            # 5) Generate answer using LLM
+            # 5) Generate answer using LLM with chat history
             llm_error = False
             async for chunk in self.llm.generate_response(
                 query=request.query,
                 context_docs=context_docs,
-                history=[],
+                history=chat_history,
             ):
                 # Check for LLM errors in the stream
                 if chunk.startswith("Error"):
