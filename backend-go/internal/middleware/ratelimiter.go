@@ -15,13 +15,13 @@ import (
 type RateLimiter interface {
 	// CheckDailyLimit checks if user has exceeded daily message limit
 	// Returns: allowed bool, used int64, limit int64, error
-	CheckDailyLimit(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (bool, int64, int64, error)
+	CheckDailyLimit(ctx context.Context, userID uint, orgID uint, dailyLimit int) (bool, int64, int64, error)
 
 	// IncrementDailyCount increments the daily message count for a user
 	IncrementDailyCount(ctx context.Context, userID uint) error
 
 	// GetRemainingMessages returns remaining messages for today
-	GetRemainingMessages(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (int64, error)
+	GetRemainingMessages(ctx context.Context, userID uint, orgID uint, dailyLimit int) (int64, error)
 
 	// Close closes the Redis connection
 	Close() error
@@ -67,9 +67,9 @@ func dailyKey(userID uint) string {
 	return fmt.Sprintf("rate:daily:%d:%s", userID, today)
 }
 
-func (r *redisRateLimiter) CheckDailyLimit(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (bool, int64, int64, error) {
+func (r *redisRateLimiter) CheckDailyLimit(ctx context.Context, userID uint, orgID uint, dailyLimit int) (bool, int64, int64, error) {
 	// If limit is 0 or negative, unlimited
-	if limits.DailyMessagesPerUser <= 0 {
+	if dailyLimit <= 0 {
 		return true, 0, 0, nil
 	}
 
@@ -77,16 +77,16 @@ func (r *redisRateLimiter) CheckDailyLimit(ctx context.Context, userID uint, org
 	count, err := r.client.Get(ctx, key).Int64()
 	if err == redis.Nil {
 		// Key doesn't exist, user hasn't sent any messages today
-		return true, 0, int64(limits.DailyMessagesPerUser), nil
+		return true, 0, int64(dailyLimit), nil
 	}
 	if err != nil {
 		r.logger.Error("❌ [RateLimiter] Failed to get daily count", "error", err, "user_id", userID)
 		// On error, allow the request but log it
-		return true, 0, int64(limits.DailyMessagesPerUser), err
+		return true, 0, int64(dailyLimit), err
 	}
 
-	allowed := count < int64(limits.DailyMessagesPerUser)
-	return allowed, count, int64(limits.DailyMessagesPerUser), nil
+	allowed := count < int64(dailyLimit)
+	return allowed, count, int64(dailyLimit), nil
 }
 
 func (r *redisRateLimiter) IncrementDailyCount(ctx context.Context, userID uint) error {
@@ -114,22 +114,22 @@ func (r *redisRateLimiter) IncrementDailyCount(ctx context.Context, userID uint)
 	return nil
 }
 
-func (r *redisRateLimiter) GetRemainingMessages(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (int64, error) {
+func (r *redisRateLimiter) GetRemainingMessages(ctx context.Context, userID uint, orgID uint, dailyLimit int) (int64, error) {
 	// If limit is 0 or negative, unlimited
-	if limits.DailyMessagesPerUser <= 0 {
+	if dailyLimit <= 0 {
 		return -1, nil // -1 indicates unlimited
 	}
 
 	key := dailyKey(userID)
 	count, err := r.client.Get(ctx, key).Int64()
 	if err == redis.Nil {
-		return int64(limits.DailyMessagesPerUser), nil
+		return int64(dailyLimit), nil
 	}
 	if err != nil {
 		return 0, err
 	}
 
-	remaining := int64(limits.DailyMessagesPerUser) - count
+	remaining := int64(dailyLimit) - count
 	if remaining < 0 {
 		remaining = 0
 	}
@@ -153,15 +153,15 @@ func NewNoOpRateLimiter(logger *slog.Logger) RateLimiter {
 	return &NoOpRateLimiter{logger: logger}
 }
 
-func (r *NoOpRateLimiter) CheckDailyLimit(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (bool, int64, int64, error) {
-	return true, 0, int64(limits.DailyMessagesPerUser), nil
+func (r *NoOpRateLimiter) CheckDailyLimit(ctx context.Context, userID uint, orgID uint, dailyLimit int) (bool, int64, int64, error) {
+	return true, 0, int64(dailyLimit), nil
 }
 
 func (r *NoOpRateLimiter) IncrementDailyCount(ctx context.Context, userID uint) error {
 	return nil
 }
 
-func (r *NoOpRateLimiter) GetRemainingMessages(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (int64, error) {
+func (r *NoOpRateLimiter) GetRemainingMessages(ctx context.Context, userID uint, orgID uint, dailyLimit int) (int64, error) {
 	return -1, nil
 }
 

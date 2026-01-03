@@ -114,8 +114,8 @@ type MockRateLimiter struct {
 	mock.Mock
 }
 
-func (m *MockRateLimiter) CheckDailyLimit(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (bool, int64, int64, error) {
-	args := m.Called(ctx, userID, orgID, limits)
+func (m *MockRateLimiter) CheckDailyLimit(ctx context.Context, userID uint, orgID uint, dailyLimit int) (bool, int64, int64, error) {
+	args := m.Called(ctx, userID, orgID, dailyLimit)
 	return args.Bool(0), args.Get(1).(int64), args.Get(2).(int64), args.Error(3)
 }
 
@@ -124,8 +124,8 @@ func (m *MockRateLimiter) IncrementDailyCount(ctx context.Context, userID uint) 
 	return args.Error(0)
 }
 
-func (m *MockRateLimiter) GetRemainingMessages(ctx context.Context, userID uint, orgID uint, limits config.PlanLimits) (int64, error) {
-	args := m.Called(ctx, userID, orgID, limits)
+func (m *MockRateLimiter) GetRemainingMessages(ctx context.Context, userID uint, orgID uint, dailyLimit int) (int64, error) {
+	args := m.Called(ctx, userID, orgID, dailyLimit)
 	return args.Get(0).(int64), args.Error(1)
 }
 
@@ -234,6 +234,11 @@ func (m *MockOrganizationRepository) UpdatePlanTier(orgID uint, tier string) err
 func (m *MockOrganizationRepository) UpdateBillingStatus(orgID uint, status string) error {
 	args := m.Called(orgID, status)
 	return args.Error(0)
+}
+
+func (m *MockOrganizationRepository) CountUserOrganizations(userID uint) (int64, error) {
+	args := m.Called(userID)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockOrganizationRepository) GetUserOrganizations(userID uint) ([]models.OrganizationMember, error) {
@@ -449,6 +454,11 @@ func (m *MockGroupRepository) DecrementStorage(groupID uint, bytes int64) error 
 	return args.Error(0)
 }
 
+func (m *MockGroupRepository) CountStandaloneGroupsByOwner(ownerID uint) (int64, error) {
+	args := m.Called(ownerID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // ==================== MOCK AUTH SERVICE ====================
 
 // MockAuthService implements service.AuthService for testing
@@ -488,6 +498,93 @@ func (m *MockAuthService) Logout(refreshToken string) error {
 func (m *MockAuthService) ValidateAccessToken(tokenString string) (uint, error) {
 	args := m.Called(tokenString)
 	return args.Get(0).(uint), args.Error(1)
+}
+
+// ==================== MOCK USER SERVICE ====================
+
+// MockUserService implements service.UserService for testing
+type MockUserService struct {
+	mock.Mock
+}
+
+func (m *MockUserService) GetUser(userID uint) (*models.User, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) GetUserByEmail(email string) (*models.User, error) {
+	args := m.Called(email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) GetUserPlanLimits(userID uint) (*config.UserPlanLimits, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*config.UserPlanLimits), args.Error(1)
+}
+
+func (m *MockUserService) UpdateUserPlanTier(userID uint, tier config.PlanTier) (*models.User, error) {
+	args := m.Called(userID, tier)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) UpdateUserBillingStatus(userID uint, status config.BillingStatus) error {
+	args := m.Called(userID, status)
+	return args.Error(0)
+}
+
+func (m *MockUserService) GetUserQuota(userID uint) (*service.UserQuota, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.UserQuota), args.Error(1)
+}
+
+func (m *MockUserService) CheckStorageLimit(userID uint, additionalBytes int64) error {
+	args := m.Called(userID, additionalBytes)
+	return args.Error(0)
+}
+
+func (m *MockUserService) UpdateStorageUsage(userID uint, deltaBytes int64) error {
+	args := m.Called(userID, deltaBytes)
+	return args.Error(0)
+}
+
+func (m *MockUserService) CanCreateOrganization(userID uint) (bool, error) {
+	args := m.Called(userID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockUserService) CanJoinOrganization(userID uint) (bool, error) {
+	args := m.Called(userID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockUserService) CanCreateStandaloneGroup(userID uint) (bool, error) {
+	args := m.Called(userID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockUserService) UpdateStripeCustomerID(userID uint, customerID string) error {
+	args := m.Called(userID, customerID)
+	return args.Error(0)
+}
+
+func (m *MockUserService) UpdateSubscriptionID(userID uint, subscriptionID string) error {
+	args := m.Called(userID, subscriptionID)
+	return args.Error(0)
 }
 
 // ==================== MOCK CHAT SERVICE CLIENT ====================
@@ -792,6 +889,12 @@ func SetupRouterWithMocks(
 	// Create worker pool for background tasks
 	workerPool := worker.NewPool(logger)
 
+	// Create mock user service for admin and user handlers
+	mockUserService := new(MockUserService)
+	mockUserService.On("GetUser", mock.Anything).Return(&models.User{PlanTier: config.PlanFree}, nil)
+	mockUserService.On("GetUserPlanLimits", mock.Anything).Return(&config.UserPlanLimits{}, nil)
+	mockUserService.On("GetUserQuota", mock.Anything).Return(&service.UserQuota{}, nil)
+
 	chatHandler := handler.NewChatHandler(grpcCli, cfg, logger, mockRateLimiter, mockOrgRepo, mockGroupRepo, mockRedisClient, mockChatRepo, workerPool)
 	kbHandler := handler.NewKnowledgeBaseHandler(grpcCli, docService, mockGroupRepo, cfg, logger)
 	authHandler := handler.NewAuthHandler(authService, logger)
@@ -801,11 +904,14 @@ func SetupRouterWithMocks(
 	}
 	var adminHandler *handler.AdminHandler
 	if orgService != nil {
-		adminHandler = handler.NewAdminHandler(orgService, groupService, logger)
+		adminHandler = handler.NewAdminHandler(orgService, groupService, mockUserService, logger)
 	}
+	var userHandler *handler.UserHandler
+	userHandler = handler.NewUserHandler(mockUserService, logger)
+	planHandler := handler.NewPlanHandler()
 	authMiddleware := middleware.NewAuthMiddleware(authService, logger)
 
-	return api.SetupRouter(chatHandler, kbHandler, authHandler, groupHandler, adminHandler, authMiddleware)
+	return api.SetupRouter(chatHandler, kbHandler, authHandler, groupHandler, adminHandler, userHandler, planHandler, authMiddleware)
 }
 
 // SetupRouterWithDefaultAuth creates a router with a default auth mock that accepts any token

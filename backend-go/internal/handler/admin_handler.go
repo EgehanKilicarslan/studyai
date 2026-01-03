@@ -16,14 +16,16 @@ import (
 type AdminHandler struct {
 	orgService   service.OrganizationService
 	groupService service.GroupService
+	userService  service.UserService
 	logger       *slog.Logger
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(orgService service.OrganizationService, groupService service.GroupService, logger *slog.Logger) *AdminHandler {
+func NewAdminHandler(orgService service.OrganizationService, groupService service.GroupService, userService service.UserService, logger *slog.Logger) *AdminHandler {
 	return &AdminHandler{
 		orgService:   orgService,
 		groupService: groupService,
+		userService:  userService,
 		logger:       logger,
 	}
 }
@@ -83,7 +85,7 @@ func (h *AdminHandler) UpdateTier(c *gin.Context) {
 		return
 	}
 
-	limits := org.GetPlanLimits()
+	limits := org.GetOrganizationPlanLimits()
 
 	h.logger.Info("✅ [AdminHandler] Organization tier updated",
 		"org_id", orgID,
@@ -102,6 +104,7 @@ func (h *AdminHandler) UpdateTier(c *gin.Context) {
 		"limits": gin.H{
 			"max_members":             limits.MaxMembers,
 			"max_groups":              limits.MaxGroups,
+			"max_documents":           limits.MaxDocuments,
 			"max_storage_bytes":       limits.MaxStorageBytes,
 			"max_file_size":           limits.MaxFileSize,
 			"daily_messages_per_user": limits.DailyMessagesPerUser,
@@ -187,7 +190,7 @@ func (h *AdminHandler) GetOrganizationQuota(c *gin.Context) {
 		return
 	}
 
-	limits := org.GetPlanLimits()
+	limits := org.GetOrganizationPlanLimits()
 
 	// Get member count
 	memberCount, err := h.orgService.CountMembers(uint(orgID))
@@ -315,7 +318,7 @@ func (h *AdminHandler) GetOrganization(c *gin.Context) {
 		return
 	}
 
-	limits := org.GetPlanLimits()
+	limits := org.GetOrganizationPlanLimits()
 
 	c.JSON(http.StatusOK, gin.H{
 		"organization": gin.H{
@@ -641,7 +644,7 @@ func (h *AdminHandler) ListMyOrganizations(c *gin.Context) {
 			}
 		}
 
-		limits := org.GetPlanLimits()
+		limits := org.GetOrganizationPlanLimits()
 
 		orgResponse := gin.H{
 			"id":             org.ID,
@@ -659,6 +662,7 @@ func (h *AdminHandler) ListMyOrganizations(c *gin.Context) {
 			"limits": gin.H{
 				"max_members":             limits.MaxMembers,
 				"max_groups":              limits.MaxGroups,
+				"max_documents":           limits.MaxDocuments,
 				"max_storage_bytes":       limits.MaxStorageBytes,
 				"max_file_size":           limits.MaxFileSize,
 				"daily_messages_per_user": limits.DailyMessagesPerUser,
@@ -670,5 +674,186 @@ func (h *AdminHandler) ListMyOrganizations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"organizations": orgs,
 		"total":         len(orgs),
+	})
+}
+
+// ==================== Admin User Management ====================
+
+// UpdateUserTierRequest represents the request body for updating a user's tier
+type UpdateUserTierRequest struct {
+	Tier string `json:"tier" binding:"required"`
+}
+
+// UpdateUserTier handles PUT /admin/users/:user_id/tier
+func (h *AdminHandler) UpdateUserTier(c *gin.Context) {
+	userIDStr := c.Param("user_id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		h.logger.Error("❌ [AdminHandler] Invalid user ID", "user_id", userIDStr, "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	var req UpdateUserTierRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("❌ [AdminHandler] Invalid request body", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	tier := config.PlanTier(req.Tier)
+	if !config.IsValidTier(tier) {
+		h.logger.Error("❌ [AdminHandler] Invalid tier value", "tier", req.Tier)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":       "Invalid tier value",
+			"valid_tiers": []string{string(config.PlanFree), string(config.PlanPro), string(config.PlanEnterprise)},
+		})
+		return
+	}
+
+	h.logger.Info("📊 [AdminHandler] Admin updating user tier",
+		"target_user_id", userID,
+		"new_tier", tier,
+	)
+
+	user, err := h.userService.UpdateUserPlanTier(uint(userID), tier)
+	if err != nil {
+		h.logger.Error("❌ [AdminHandler] Failed to update user tier", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update tier"})
+		return
+	}
+
+	limits := user.GetPlanLimits()
+
+	h.logger.Info("✅ [AdminHandler] User tier updated",
+		"user_id", userID,
+		"tier", tier,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "User tier updated successfully",
+		"user": gin.H{
+			"id":             user.ID,
+			"username":       user.Username,
+			"email":          user.Email,
+			"plan_tier":      user.PlanTier,
+			"billing_status": user.BillingStatus,
+		},
+		"limits": gin.H{
+			"max_standalone_groups":   limits.MaxStandaloneGroups,
+			"max_documents":           limits.MaxDocuments,
+			"max_storage_bytes":       limits.MaxStorageBytes,
+			"max_file_size":           limits.MaxFileSize,
+			"daily_messages":          limits.DailyMessages,
+			"max_organizations":       limits.MaxOrganizations,
+			"can_create_organization": limits.CanCreateOrganization,
+		},
+	})
+}
+
+// UpdateUserBillingStatus handles PUT /admin/users/:user_id/billing
+func (h *AdminHandler) UpdateUserBillingStatus(c *gin.Context) {
+	userIDStr := c.Param("user_id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		h.logger.Error("❌ [AdminHandler] Invalid user ID", "user_id", userIDStr, "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	var req UpdateBillingStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("❌ [AdminHandler] Invalid request body", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	status := config.BillingStatus(req.Status)
+	validStatuses := []config.BillingStatus{
+		config.BillingActive,
+		config.BillingPastDue,
+		config.BillingCanceled,
+		config.BillingTrialing,
+		config.BillingSuspended,
+	}
+
+	isValid := false
+	for _, s := range validStatuses {
+		if status == s {
+			isValid = true
+			break
+		}
+	}
+
+	if !isValid {
+		h.logger.Error("❌ [AdminHandler] Invalid billing status", "status", req.Status)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":          "Invalid billing status",
+			"valid_statuses": validStatuses,
+		})
+		return
+	}
+
+	h.logger.Info("💳 [AdminHandler] Admin updating user billing status",
+		"target_user_id", userID,
+		"new_status", status,
+	)
+
+	if err := h.userService.UpdateUserBillingStatus(uint(userID), status); err != nil {
+		h.logger.Error("❌ [AdminHandler] Failed to update user billing status", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update billing status"})
+		return
+	}
+
+	h.logger.Info("✅ [AdminHandler] User billing status updated",
+		"user_id", userID,
+		"status", status,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "User billing status updated successfully",
+		"billing_status": status,
+	})
+}
+
+// GetUserQuota handles GET /admin/users/:user_id/quota
+func (h *AdminHandler) GetUserQuota(c *gin.Context) {
+	userIDStr := c.Param("user_id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		h.logger.Error("❌ [AdminHandler] Invalid user ID", "user_id", userIDStr, "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	quota, err := h.userService.GetUserQuota(uint(userID))
+	if err != nil {
+		h.logger.Error("❌ [AdminHandler] Failed to get user quota", "user_id", userID, "error", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":             quota.User.ID,
+			"username":       quota.User.Username,
+			"email":          quota.User.Email,
+			"plan_tier":      quota.User.PlanTier,
+			"billing_status": quota.User.BillingStatus,
+		},
+		"usage": gin.H{
+			"standalone_groups": quota.Usage.StandaloneGroups,
+			"organizations":     quota.Usage.Organizations,
+			"storage_bytes":     quota.Usage.StorageBytes,
+		},
+		"limits": gin.H{
+			"max_standalone_groups":   quota.Limits.MaxStandaloneGroups,
+			"max_documents":           quota.Limits.MaxDocuments,
+			"max_storage_bytes":       quota.Limits.MaxStorageBytes,
+			"max_file_size":           quota.Limits.MaxFileSize,
+			"daily_messages":          quota.Limits.DailyMessages,
+			"max_organizations":       quota.Limits.MaxOrganizations,
+			"can_create_organization": quota.Limits.CanCreateOrganization,
+		},
 	})
 }

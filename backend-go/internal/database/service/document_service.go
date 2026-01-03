@@ -77,8 +77,8 @@ func (s *documentService) CreateDocument(orgID *uint, groupID *uint, ownerID uin
 	)
 
 	// Determine storage context: Organization, Standalone Group, or User-scoped
-	var orgLimits *config.PlanLimits
-	var groupLimits *config.PlanLimits
+	var orgLimits *config.OrganizationPlanLimits
+	var groupLimits *config.GroupPlanLimits
 	var org *models.Organization
 	var group *models.Group
 	var isStandaloneGroup bool
@@ -93,7 +93,7 @@ func (s *documentService) CreateDocument(orgID *uint, groupID *uint, ownerID uin
 			return nil, fmt.Errorf("failed to get organization: %w", err)
 		}
 
-		limits := org.GetPlanLimits()
+		limits := org.GetOrganizationPlanLimits()
 		orgLimits = &limits
 
 		// Check document count limit before processing the file
@@ -147,7 +147,7 @@ func (s *documentService) CreateDocument(orgID *uint, groupID *uint, ownerID uin
 		// Only apply standalone group limits if the group has no organization
 		if group.OrganizationID == nil {
 			isStandaloneGroup = true
-			limits := group.GetPlanLimits()
+			limits := group.GetGroupPlanLimits()
 			groupLimits = &limits
 
 			// Check storage quota before processing (using group's current usage)

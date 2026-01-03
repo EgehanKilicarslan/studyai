@@ -53,7 +53,7 @@ type GroupService interface {
 	GetUserPermissions(userID, groupID uint) ([]string, error)
 
 	// Billing/Limits checks for standalone groups
-	GetGroupLimits(groupID uint) (*config.PlanLimits, error)
+	GetGroupLimits(groupID uint) (*config.GroupPlanLimits, error)
 	CheckStorageLimit(groupID uint, additionalBytes int64) error
 	UpdateStandaloneGroupTier(requesterID, groupID uint, planTier config.PlanTier, billingStatus config.BillingStatus) (*models.Group, error)
 	UpdateStandaloneGroupBillingStatus(groupID uint, billingStatus config.BillingStatus) error
@@ -64,7 +64,7 @@ type GroupService interface {
 type StandaloneGroupQuota struct {
 	Group  *models.Group
 	Usage  GroupUsage
-	Limits config.PlanLimits
+	Limits config.GroupPlanLimits
 }
 
 // GroupUsage represents current resource usage for a group
@@ -95,22 +95,45 @@ func NewGroupService(
 	}
 }
 
+// groupMemberLimits is a helper struct to hold member limits regardless of group type
+type groupMemberLimits struct {
+	MaxMembers           int
+	MaxDocuments         int
+	MaxStorageBytes      int64
+	MaxFileSize          int64
+	DailyMessagesPerUser int
+}
+
 // getGroupLimits is a private helper that returns the applicable plan limits for a group.
-// - If the group belongs to an organization, it returns the organization's plan limits.
+// - If the group belongs to an organization, it returns limits derived from the organization's plan.
 // - If the group is standalone, it returns limits based on the group's own PlanTier.
-func (s *groupService) getGroupLimits(group *models.Group) (config.PlanLimits, error) {
+func (s *groupService) getGroupLimits(group *models.Group) (groupMemberLimits, error) {
 	if group.OrganizationID != nil {
 		// Organization group: use organization's plan limits
 		org, err := s.orgRepo.FindByID(*group.OrganizationID)
 		if err != nil {
 			s.logger.Error("❌ [GroupService] Failed to fetch organization for limits", "org_id", *group.OrganizationID, "error", err)
-			return config.PlanLimits{}, err
+			return groupMemberLimits{}, err
 		}
-		return org.GetPlanLimits(), nil
+		orgLimits := org.GetOrganizationPlanLimits()
+		return groupMemberLimits{
+			MaxMembers:           orgLimits.MaxMembers,
+			MaxDocuments:         orgLimits.MaxDocuments,
+			MaxStorageBytes:      orgLimits.MaxStorageBytes,
+			MaxFileSize:          orgLimits.MaxFileSize,
+			DailyMessagesPerUser: orgLimits.DailyMessagesPerUser,
+		}, nil
 	}
 
 	// Standalone group: use the group's own plan tier
-	return group.GetPlanLimits(), nil
+	groupLimits := group.GetGroupPlanLimits()
+	return groupMemberLimits{
+		MaxMembers:           groupLimits.MaxMembers,
+		MaxDocuments:         groupLimits.MaxDocuments,
+		MaxStorageBytes:      groupLimits.MaxStorageBytes,
+		MaxFileSize:          groupLimits.MaxFileSize,
+		DailyMessagesPerUser: groupLimits.DailyMessagesPerUser,
+	}, nil
 }
 
 // ==================== Group Operations ====================
@@ -125,7 +148,7 @@ func (s *groupService) CreateGroup(orgID uint, name, description string, creator
 		return nil, err
 	}
 
-	limits := org.GetPlanLimits()
+	limits := org.GetOrganizationPlanLimits()
 	if limits.MaxGroups >= 0 { // -1 means unlimited
 		currentCount, err := s.groupRepo.CountByOrganization(orgID)
 		if err != nil {
@@ -703,7 +726,7 @@ func (s *groupService) CreateStandaloneGroup(name, description string, creatorUs
 // GetGroupLimits returns the plan limits for a group.
 // For standalone groups, it returns the group's own plan limits.
 // For organization groups, it returns nil (organization limits should be used instead).
-func (s *groupService) GetGroupLimits(groupID uint) (*config.PlanLimits, error) {
+func (s *groupService) GetGroupLimits(groupID uint) (*config.GroupPlanLimits, error) {
 	group, err := s.groupRepo.FindByID(groupID)
 	if err != nil {
 		return nil, err
@@ -714,7 +737,7 @@ func (s *groupService) GetGroupLimits(groupID uint) (*config.PlanLimits, error) 
 		return nil, nil
 	}
 
-	limits := group.GetPlanLimits()
+	limits := group.GetGroupPlanLimits()
 	return &limits, nil
 }
 
@@ -732,7 +755,7 @@ func (s *groupService) CheckStorageLimit(groupID uint, additionalBytes int64) er
 		return nil
 	}
 
-	limits := group.GetPlanLimits()
+	limits := group.GetGroupPlanLimits()
 
 	// Check if unlimited storage (-1)
 	if limits.MaxStorageBytes < 0 {
@@ -854,7 +877,7 @@ func (s *groupService) GetStandaloneGroupQuota(groupID uint) (*StandaloneGroupQu
 		memberCount = 0
 	}
 
-	limits := group.GetPlanLimits()
+	limits := group.GetGroupPlanLimits()
 
 	return &StandaloneGroupQuota{
 		Group: group,

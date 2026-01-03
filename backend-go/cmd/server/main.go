@@ -69,11 +69,14 @@ func main() {
 	groupService := service.NewGroupService(groupRepo, orgRepo, userRepo, appLogger)
 	documentService := service.NewDocumentService(documentRepo, groupRepo, orgRepo, cfg, appLogger)
 	orgService := service.NewOrganizationService(orgRepo, groupRepo, userRepo, appLogger)
+	userService := service.NewUserService(userRepo, orgRepo, groupRepo, appLogger)
 
 	// 8. Initialize Handlers & Middleware
 	authHandler := handler.NewAuthHandler(authService, appLogger)
 	groupHandler := handler.NewGroupHandler(groupService, appLogger)
-	adminHandler := handler.NewAdminHandler(orgService, groupService, appLogger)
+	adminHandler := handler.NewAdminHandler(orgService, groupService, userService, appLogger)
+	userHandler := handler.NewUserHandler(userService, appLogger)
+	planHandler := handler.NewPlanHandler()
 	authMiddleware := middleware.NewAuthMiddleware(authService, appLogger)
 
 	// 9. Initialize Rate Limiter
@@ -113,7 +116,7 @@ func main() {
 	chatHandler := handler.NewChatHandler(grpcClient, cfg, appLogger, rateLimiter, orgRepo, groupRepo, redisClient, chatRepo, workerPool)
 	knowledgeBaseHandler := handler.NewKnowledgeBaseHandler(grpcClient, documentService, groupRepo, cfg, appLogger)
 
-	r := api.SetupRouter(chatHandler, knowledgeBaseHandler, authHandler, groupHandler, adminHandler, authMiddleware)
+	r := api.SetupRouter(chatHandler, knowledgeBaseHandler, authHandler, groupHandler, adminHandler, userHandler, planHandler, authMiddleware)
 
 	// 13. Create HTTP Server with graceful shutdown support
 	addr := fmt.Sprintf(":%s", cfg.ApiServicePort)

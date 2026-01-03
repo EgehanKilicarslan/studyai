@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/EgehanKilicarslan/studyai/backend-go/internal/config"
 	"gorm.io/gorm"
 )
 
@@ -17,6 +18,14 @@ type User struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
+	// Billing fields for individual user plans
+	PlanTier         config.PlanTier      `gorm:"not null;default:FREE" json:"plan_tier"`
+	BillingStatus    config.BillingStatus `gorm:"not null;default:active" json:"billing_status"`
+	StripeCustomerID *string              `json:"stripe_customer_id,omitempty"`
+	SubscriptionID   *string              `json:"subscription_id,omitempty"`
+	CurrentPeriodEnd *time.Time           `json:"current_period_end,omitempty"`
+	UsedStorageBytes int64                `gorm:"not null;default:0" json:"used_storage_bytes"`
+
 	// Relationships
 	OrganizationMemberships []OrganizationMember `gorm:"foreignKey:UserID" json:"organization_memberships,omitempty"`
 	GroupMemberships        []GroupMember        `gorm:"foreignKey:UserID" json:"group_memberships,omitempty"`
@@ -25,6 +34,11 @@ type User struct {
 // TableName overrides the table name
 func (User) TableName() string {
 	return "users"
+}
+
+// GetPlanLimits returns the plan limits for this user's tier
+func (u *User) GetPlanLimits() config.UserPlanLimits {
+	return config.GetUserPlanLimits(u.PlanTier)
 }
 
 // GetOrganizations returns all organizations the user belongs to

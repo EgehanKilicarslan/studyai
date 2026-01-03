@@ -13,6 +13,8 @@ func SetupRouter(
 	authHandler *handler.AuthHandler,
 	groupHandler *handler.GroupHandler,
 	adminHandler *handler.AdminHandler,
+	userHandler *handler.UserHandler,
+	planHandler *handler.PlanHandler,
 	authMiddleware *middleware.AuthMiddleware,
 ) *gin.Engine {
 	r := gin.Default()
@@ -22,6 +24,15 @@ func SetupRouter(
 	r.GET("/api/v1/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+
+	// Public plan info routes
+	plansGroup := r.Group("/api/v1/plans")
+	{
+		plansGroup.GET("", planHandler.GetAllPlans)                        // All plans combined
+		plansGroup.GET("/users", planHandler.GetUserPlans)                 // User plan tiers
+		plansGroup.GET("/organizations", planHandler.GetOrganizationPlans) // Organization plan tiers
+		plansGroup.GET("/groups", planHandler.GetGroupPlans)               // Standalone group plan tiers
+	}
 
 	// Auth routes (Public)
 	authGroup := r.Group("/api/v1/auth")
@@ -44,6 +55,16 @@ func SetupRouter(
 		// User-specific routes (/me)
 		meRoutes := api.Group("/me")
 		{
+			// User profile and quota (read-only for users)
+			meRoutes.GET("/profile", userHandler.GetProfile)
+			meRoutes.GET("/quota", userHandler.GetQuota)
+
+			// Permission checks (read-only - helps frontend know what user can do)
+			meRoutes.GET("/can-create-organization", userHandler.CheckCanCreateOrganization)
+			meRoutes.GET("/can-join-organization", userHandler.CheckCanJoinOrganization)
+			meRoutes.GET("/can-create-group", userHandler.CheckCanCreateStandaloneGroup)
+
+			// Existing routes
 			meRoutes.GET("/organizations", adminHandler.ListMyOrganizations)
 			meRoutes.GET("/groups", groupHandler.ListMyGroups)
 		}
@@ -101,6 +122,11 @@ func SetupRouter(
 			adminRoutes.PUT("/groups/:group_id/tier", groupHandler.UpdateGroupTier)
 			adminRoutes.PUT("/groups/:group_id/billing", groupHandler.UpdateGroupBillingStatus)
 			adminRoutes.GET("/groups/:group_id/quota", groupHandler.GetGroupQuota)
+
+			// User billing management (admin endpoints for managing other users)
+			adminRoutes.PUT("/users/:user_id/tier", adminHandler.UpdateUserTier)
+			adminRoutes.PUT("/users/:user_id/billing", adminHandler.UpdateUserBillingStatus)
+			adminRoutes.GET("/users/:user_id/quota", adminHandler.GetUserQuota)
 		}
 	}
 

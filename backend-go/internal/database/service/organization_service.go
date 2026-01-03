@@ -177,7 +177,7 @@ func (s *organizationService) AddMember(orgID, userID uint, role string) (*model
 	}
 
 	// Check member quota
-	limits := org.GetPlanLimits()
+	limits := org.GetOrganizationPlanLimits()
 	if limits.MaxMembers >= 0 { // -1 means unlimited
 		currentCount, err := s.orgRepo.CountMembers(orgID)
 		if err != nil {
@@ -290,7 +290,7 @@ func (s *organizationService) GetStorageUsage(orgID uint) (used int64, limit int
 		return 0, 0, err
 	}
 
-	limits := org.GetPlanLimits()
+	limits := org.GetOrganizationPlanLimits()
 	return org.UsedStorageBytes, limits.MaxStorageBytes, nil
 }
 

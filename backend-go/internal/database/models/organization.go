@@ -15,6 +15,9 @@ type Organization struct {
 	Domain           *string              `gorm:"uniqueIndex" json:"domain,omitempty"`
 	PlanTier         config.PlanTier      `gorm:"not null;default:FREE" json:"plan_tier"`
 	BillingStatus    config.BillingStatus `gorm:"not null;default:active" json:"billing_status"`
+	StripeCustomerID *string              `json:"stripe_customer_id,omitempty"`
+	SubscriptionID   *string              `json:"subscription_id,omitempty"`
+	CurrentPeriodEnd *time.Time           `json:"current_period_end,omitempty"`
 	UsedStorageBytes int64                `gorm:"not null;default:0" json:"used_storage_bytes"`
 	CreatedAt        time.Time            `json:"created_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
@@ -31,9 +34,9 @@ func (Organization) TableName() string {
 	return "organizations"
 }
 
-// GetPlanLimits returns the plan limits for this organization's tier
-func (o *Organization) GetPlanLimits() config.PlanLimits {
-	return config.GetPlanLimits(o.PlanTier)
+// GetOrganizationPlanLimits returns the organization-specific plan limits for this organization's tier
+func (o *Organization) GetOrganizationPlanLimits() config.OrganizationPlanLimits {
+	return config.GetOrganizationPlanLimits(o.PlanTier)
 }
 
 // OrganizationRole represents a dynamic role within an organization with configurable permissions

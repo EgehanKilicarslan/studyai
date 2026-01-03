@@ -42,16 +42,16 @@ func (g *Group) IsStandalone() bool {
 	return g.OrganizationID == nil
 }
 
-// GetPlanLimits returns the plan limits for this standalone group's tier.
+// GetGroupPlanLimits returns the group-specific plan limits for this standalone group's tier.
 // For groups that belong to an organization, this returns the FREE tier limits
-// (the organization's limits should be used instead).
-func (g *Group) GetPlanLimits() config.PlanLimits {
+// (the organization's limits should be used instead via GetOrganizationPlanLimits).
+func (g *Group) GetGroupPlanLimits() config.GroupPlanLimits {
 	if !g.IsStandalone() {
 		// For organization groups, return FREE limits as a fallback
 		// The organization's limits should be checked instead
-		return config.GetPlanLimits(config.PlanFree)
+		return config.GetGroupPlanLimits(config.PlanFree)
 	}
-	return config.GetPlanLimits(g.PlanTier)
+	return config.GetGroupPlanLimits(g.PlanTier)
 }
 
 // GroupRole represents a role within a group with dynamic permissions

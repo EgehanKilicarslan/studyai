@@ -19,6 +19,7 @@ type GroupRepository interface {
 	Delete(id uint) error
 	ListByOrganization(orgID uint, offset, limit int) ([]models.Group, int64, error)
 	CountByOrganization(orgID uint) (int64, error)
+	CountStandaloneGroupsByOwner(ownerID uint) (int64, error)
 
 	// Role operations
 	CreateRole(role *models.GroupRole) error
@@ -339,6 +340,19 @@ func (r *groupRepository) DecrementStorage(groupID uint, bytes int64) error {
 		return ErrGroupNotFound
 	}
 	return nil
+}
+
+func (r *groupRepository) CountStandaloneGroupsByOwner(ownerID uint) (int64, error) {
+	// Count standalone groups (organization_id IS NULL) where the user is the owner
+	var count int64
+	err := r.db.Model(&models.Group{}).
+		Joins("JOIN group_members ON group_members.group_id = groups.id").
+		Joins("JOIN group_roles ON group_roles.id = group_members.role_id").
+		Where("groups.organization_id IS NULL").
+		Where("group_members.user_id = ?", ownerID).
+		Where("group_roles.name = ?", "Owner").
+		Count(&count).Error
+	return count, err
 }
 
 // Repository errors for groups

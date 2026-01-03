@@ -83,7 +83,7 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 	// Extract organization ID and group IDs (optional - check headers, query params, or context)
 	var orgIDUint uint
 	var groupIDs []uint
-	var limits config.PlanLimits
+	var dailyMessageLimit int
 
 	// Try to get orgID from headers first
 	if orgIDStr := c.GetHeader("x-organization-id"); orgIDStr != "" {
@@ -126,12 +126,13 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 		org, err := h.orgRepo.FindByID(orgIDUint)
 		if err != nil {
 			h.logger.Warn("⚠️ [Handler] Failed to get organization for rate limiting", "error", err)
-			// Continue without rate limiting
-			limits = config.DefaultPlanLimits[config.PlanFree]
+			// Continue without rate limiting - use default free plan limit
+			dailyMessageLimit = config.GetOrganizationPlanLimits(config.PlanFree).DailyMessagesPerUser
 		} else {
-			limits = org.GetPlanLimits()
+			limits := org.GetOrganizationPlanLimits()
+			dailyMessageLimit = limits.DailyMessagesPerUser
 
-			allowed, used, limit, err := h.rateLimiter.CheckDailyLimit(c.Request.Context(), userIDUint, orgIDUint, limits)
+			allowed, used, limit, err := h.rateLimiter.CheckDailyLimit(c.Request.Context(), userIDUint, orgIDUint, dailyMessageLimit)
 			if err != nil {
 				h.logger.Warn("⚠️ [Handler] Rate limit check failed, allowing request", "error", err)
 			} else if !allowed {
@@ -152,9 +153,12 @@ func (h *ChatHandler) ChatHandler(c *gin.Context) {
 		}
 	} else {
 		// No org context - use free plan limits but don't enforce rate limiting
-		limits = config.DefaultPlanLimits[config.PlanFree]
+		dailyMessageLimit = config.GetOrganizationPlanLimits(config.PlanFree).DailyMessagesPerUser
 		h.logger.Debug("📊 [Handler] No organization context, skipping rate limiting")
 	}
+
+	// Keep dailyMessageLimit for potential future use (e.g., returning remaining messages in response)
+	_ = dailyMessageLimit
 
 	// Convert userID to string for gRPC metadata
 	userIDStr := fmt.Sprintf("%v", userID)

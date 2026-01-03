@@ -35,6 +35,7 @@ type OrganizationRepository interface {
 	ListMembers(orgID uint, offset, limit int) ([]models.OrganizationMember, int64, error)
 	GetUserOrganizations(userID uint) ([]models.OrganizationMember, error)
 	CountMembers(orgID uint) (int64, error)
+	CountUserOrganizations(userID uint) (int64, error)
 
 	// Storage operations (atomic)
 	IncrementStorage(orgID uint, bytes int64) error
@@ -307,6 +308,14 @@ func (r *organizationRepository) DeleteRole(roleID uint) error {
 		return errors.New("role not found")
 	}
 	return nil
+}
+
+func (r *organizationRepository) CountUserOrganizations(userID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.OrganizationMember{}).
+		Where("user_id = ?", userID).
+		Count(&count).Error
+	return count, err
 }
 
 // Repository errors for organizations
